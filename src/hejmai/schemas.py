@@ -7,9 +7,10 @@ from typing import Optional
 class ItemBase(BaseModel):
     nome: str
     categoria: str
-    quantidade: float = Field(
+    quantidade_inicial: float = Field(
         ..., gt=0, description="A quantidade deve ser maior que zero"
     )
+    quantidade_atual: Optional[float] = None
     unidade: str  # un, kg, pacote, etc.
     data_validade: date
     preco_pago: Optional[float] = None
