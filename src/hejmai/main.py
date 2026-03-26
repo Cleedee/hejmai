@@ -86,5 +86,5 @@ def start():
     import uvicorn
 
     uvicorn.run(
-        "hejmai.main:app", host="127.0.0.1", port=8081, reload=True, app_dir="src"
+        "hejmai.main:app", host="0.0.0.0", port=8081, reload=True, app_dir="src"
     )
