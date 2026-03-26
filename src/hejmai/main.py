@@ -18,7 +18,7 @@ def read_root():
 
 @app.post("/itens/", response_model=schemas.Item)
 def criar_item(item: schemas.ItemCreate, db: Session = Depends(database.get_db)):
-    db_item = models.Item(**item.dict())
+    db_item = models.Item(**item.model_dump())
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
@@ -34,12 +34,13 @@ def consumir_item(
     db_item = db.query(models.Item).filter(models.Item.id == item_id).first()
     if not db_item:
         raise HTTPException(status_code=404, detail="Item não encontrado")
+    assert db_item is not None
 
     # Se não passar quantidade, assume consumo total
     if quantidade is None or quantidade >= db_item.quantidade_atual:
         db_item.quantidade_atual = 0
         db_item.status = "consumido"
-        db_item.data_fim = date.today()
+        db_item.data_fim = datetime.date.today()
     else:
         db_item.quantidade_atual -= quantidade
 
@@ -84,21 +85,6 @@ def obter_historico(dias: int = 30, db: Session = Depends(database.get_db)):
         models.Item.data_fim >= data_limite
     ).all()
     return itens
-
-
-@app.patch("/personagens/{nome}/ganhar-xp")
-def ganhar_xp(nome: str, quantidade_xp: int, db: Session = Depends(database.get_db)):
-    heroi = db.query(models.Personagem).filter(models.Personagem.nome == nome).first()
-    if not heroi:
-        heroi = models.Personagem(nome=nome, xp=0, nivel=1)
-        db.add(heroi)
-    
-    heroi.xp += quantidade_xp
-    # Lógica simples de level up: a cada 100 XP sobe um nível
-    heroi.nivel = (heroi.xp // 100) + 1
-
-    db.commit()
-    return {"nome": heroi.nome, "xp": heroi.xp, "nivel": heroi.nivel}
 
 def start():
     import uvicorn

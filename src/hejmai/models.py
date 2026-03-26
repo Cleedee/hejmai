@@ -18,11 +18,3 @@ class Item(Base):
     data_registro = Column(Date, default=datetime.date.today)
     data_fim = Column(Date, nullable=True)
     estabelecimento = Column(String, nullable=True)
-
-class Personagem(Base):
-    __tablename__ = "personagens"
-
-    id = Column(Integer, primary_key=True, index=True)
-    nome = Column(String, index=True)
-    xp = Column(Integer, default=0)
-    nivel = Column(Integer, default=1)
