@@ -31,18 +31,14 @@ def consumir_item(
     quantidade: float | None = None,
     db: Session = Depends(database.get_db),
 ):
-    db_item = db.query(models.Item).filter(models.Item.id == item_id).first()
+    db_item: models.Item | None = db.query(models.Item).filter(models.Item.id == item_id).first()
     if not db_item:
         raise HTTPException(status_code=404, detail="Item não encontrado")
     assert db_item is not None
 
-    # Se não passar quantidade, assume consumo total
-    if quantidade is None or quantidade >= db_item.quantidade_atual:
-        db_item.quantidade_atual = 0
-        db_item.status = "consumido"
-        db_item.data_fim = datetime.date.today()
-    else:
-        db_item.quantidade_atual -= quantidade
+    db_item.quantidade = 0.0
+    db_item.status = "consumido"
+    db_item.data_fim = datetime.date.today()
 
     db.commit()
     db.refresh(db_item)
