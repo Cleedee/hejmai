@@ -3,6 +3,7 @@ from typing import List
 
 from fastapi import Body, FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from hejmai import models, schemas, database, nlp
 from hejmai.validator import SanityChecker
 
@@ -17,6 +18,78 @@ processador_receitas = nlp.Receitas("mistral:latest")
 @app.get("/")
 def read_root():
     return {"status": "Agente Online", "ano": 2026}
+
+@app.get("/produtos/lista-compras-detalhada")
+async def gerar_lista_detalhada(db: Session = Depends(database.get_db)):
+    # 1. Busca produtos com estoque baixo
+    itens = db.query(models.Produto).filter(models.Produto.estoque_atual < 1.0).all()
+    
+    lista_final = []
+    for p in itens:
+        # Busca o último preço pago para servir de âncora
+        ultimo_item = db.query(models.ItemCompra).filter(
+            models.ItemCompra.produto_id == p.id
+        ).order_by(models.ItemCompra.id.desc()).first()
+        
+        preco_ref = ultimo_item.preco_unitario if ultimo_item else 0.0
+        
+        lista_final.append({
+            "nome": p.nome,
+            "categoria": p.categoria,
+            "preco_referencia": preco_ref,
+            "estoque": p.estoque_atual,
+            "unidade": p.unidade_medida
+        })
+    
+    return lista_final
+
+@app.get("/relatorios/historico-precos/{produto_id}")
+async def historico_precos(produto_id: int, db: Session = Depends(database.get_db)):
+    # Buscamos todos os itens de compra vinculados ao produto, ordenados por data
+    historico = db.query(models.ItemCompra).join(models.Compra).filter(
+        models.ItemCompra.produto_id == produto_id
+    ).order_by(models.Compra.data_compra).all()
+    
+    return [
+        {
+            "data": item.compra.data_compra,
+            "preco": item.preco_unitario,
+            "local": item.compra.local_compra
+        } for item in historico
+    ]
+
+@app.get("/relatorios/previsao-gastos")
+async def prever_gastos(db: Session = Depends(database.get_db)):
+    # 1. Busca produtos que estão abaixo do limite (estoque < 1.0)
+    itens_em_falta = db.query(models.Produto).filter(models.Produto.estoque_atual < 1.0).all()
+    
+    previsao_total = 0.0
+    detalhes = []
+
+    for produto in itens_em_falta:
+        # 2. Busca o PREÇO MÉDIO ou ÚLTIMO PREÇO desse produto no histórico
+        ultimo_item = db.query(models.ItemCompra).filter(
+            models.ItemCompra.produto_id == produto.id
+        ).order_by(models.ItemCompra.id.desc()).first()
+
+        preco_base = ultimo_item.preco_unitario if ultimo_item else 0.0
+        
+        # Simulamos a compra de uma "unidade padrão" (ex: 1kg ou 1 pack)
+        # Você pode ajustar isso para a 'quantidade_ideal' se tiver esse campo
+        quantidade_estimada = 1.0 
+        custo_estimado = preco_base * quantidade_estimada
+        
+        previsao_total += custo_estimado
+        detalhes.append({
+            "produto": produto.nome,
+            "ultimo_preco": preco_base,
+            "custo_estimado": custo_estimado
+        })
+
+    return {
+        "valor_total_estimado": round(previsao_total, 2),
+        "itens": detalhes
+    }
 
 @app.post("/processar-entrada-livre")
 async def processar_texto_bot(payload: dict = Body(...), db: Session = Depends(database.get_db)):

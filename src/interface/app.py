@@ -1,7 +1,9 @@
+import json
+
 import streamlit as st
 import httpx
 import pandas as pd
-import json
+import altair as alt
 
 st.set_page_config(page_title="Hejmai - Lab de Compras", layout="wide")
 
@@ -65,3 +67,73 @@ if st.button("Ver Estoque Atual 📦"):
         estoque = res.json()
         st.write("Produtos em Estoque:")
         st.dataframe(pd.DataFrame(estoque['estoque_baixo'] + estoque['vencendo_em_breve']))
+
+st.divider()
+st.header("📈 Inteligência de Mercado (Teresina)")
+
+# 1. Seleção do Produto
+res_produtos = httpx.get(f"{API_URL}/produtos/alertas") # Ou um endpoint de listagem total
+if res_produtos.status_code == 200:
+    lista_produtos = res_produtos.json()['estoque_baixo'] + res_produtos.json()['vencendo_em_breve']
+    
+    if lista_produtos:
+        prod_selecionado = st.selectbox(
+            "Selecione um produto para ver a evolução do preço:",
+            options=lista_produtos,
+            format_func=lambda x: x['nome']
+        )
+
+        # 2. Busca o Histórico
+        res_hist = httpx.get(f"{API_URL}/relatorios/historico-precos/{prod_selecionado['id']}")
+        
+        if res_hist.status_code == 200 and res_hist.json():
+            df = pd.DataFrame(res_hist.json())
+            df['data'] = pd.to_datetime(df['data'])
+
+            # 3. Criação do Gráfico Interativo com Altair
+            chart = alt.Chart(df).mark_line(point=True).encode(
+                x=alt.X('data:T', title='Data da Compra'),
+                y=alt.Y('preco:Q', title='Preço Unitário (R$)', scale=alt.Scale(zero=False)),
+                tooltip=['data', 'preco', 'local']
+            ).properties(
+                width=700,
+                height=400,
+                title=f"Variação de Preço: {prod_selecionado['nome']}"
+            ).interactive()
+
+            st.altair_chart(chart, use_container_width=True)
+            
+            # Tabela comparativa rápida
+            st.dataframe(df.sort_values(by='data', ascending=False))
+        else:
+            st.info("Ainda não há histórico suficiente para este produto.")
+
+st.divider()
+st.header("🛒 Simulador de Próxima Compra")
+
+if st.button("Calcular Estimativa de Gastos 💰"):
+    res = httpx.get(f"{API_URL}/relatorios/previsao-gastos")
+    
+    if res.status_code == 200:
+        previsao = res.json()
+        
+        # Métrica em destaque
+        st.metric(
+            label="Estimativa Total para Reposição", 
+            value=f"R$ {previsao['valor_total_estimado']:.2f}",
+            delta="Baseado em preços históricos"
+        )
+
+        if previsao['itens']:
+            df_previsao = pd.DataFrame(previsao['itens'])
+            st.table(df_previsao)
+            
+            # Alerta de Orçamento
+            # Supondo que você queira gastar no máximo R$ 500 por ida
+            LIMITE_ORCAMENTO = 500.00
+            if previsao['valor_total_estimado'] > LIMITE_ORCAMENTO:
+                st.error(f"⚠️ Atenção: A estimativa excede o seu limite planejado de R$ {LIMITE_ORCAMENTO}!")
+            else:
+                st.success("✅ A estimativa está dentro do plano financeiro.")
+        else:
+            st.info("Nenhum item com estoque baixo para repor.")
