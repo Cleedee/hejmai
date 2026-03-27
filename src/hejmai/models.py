@@ -1,19 +1,46 @@
-from sqlalchemy import Column, Integer, String, Float, Date
+from sqlalchemy import Column, Integer, String, Float, Date, ForeignKey
+from sqlalchemy.orm import relationship
 from hejmai.database import Base
 import datetime
 
+class Produto(Base):
+    """O Catálogo: Representa a identidade do que você consome."""
+    __tablename__ = "produtos"
+    
+    id = Column(Integer, primary_key=True)
+    nome = Column(String, unique=True, index=True)
+    categoria = Column(String)
+    unidade_medida = Column(String) # kg, un, l
+    estoque_atual = Column(Float, default=0.0)
+    ultima_validade = Column(Date)
+    
+    # Relação com o histórico de preços
+    historico_compras = relationship("ItemCompra", back_populates="produto")
 
-class Item(Base):
-    __tablename__ = "itens"
+class Compra(Base):
+    """O Evento: Representa a ida ao mercado (Nota Fiscal)."""
+    __tablename__ = "compras"
+    
+    id = Column(Integer, primary_key=True)
+    local_compra = Column(String) # Onde foi comprado (Mercado A, B)
+    data_compra = Column(Date, default=datetime.date.today)
+    valor_total_nota = Column(Float)
+    
+    itens = relationship("ItemCompra", back_populates="compra")
 
-    id = Column(Integer, primary_key=True, index=True)
-    nome = Column(String, index=True)
-    categoria = Column(String)  # Ex: Laticínios, Proteínas, Limpeza
-    quantidade = Column(Float, default=1.0)
-    unidade = Column(String)  # Ex: kg, un, ml
-    data_validade = Column(Date)
-    preco_pago = Column(Float)
-    status = Column(String, default="ativo")  # ativo, consumido, desperdiçado
-    data_registro = Column(Date, default=datetime.date.today)
-    data_fim = Column(Date, nullable=True)
-    estabelecimento = Column(String, nullable=True)
+class ItemCompra(Base):
+    """A Transação: O elo entre o Produto e a Compra específica."""
+    __tablename__ = "itens_compra"
+    
+    id = Column(Integer, primary_key=True)
+    produto_id = Column(Integer, ForeignKey("produtos.id"))
+    compra_id = Column(Integer, ForeignKey("compras.id"))
+    
+    quantidade = Column(Float)
+    preco_unitario = Column(Float)
+    validade_especifica = Column(Date)
+    
+    produto = relationship("Produto", back_populates="historico_compras")
+    compra = relationship("Compra", back_populates="itens")
+
+

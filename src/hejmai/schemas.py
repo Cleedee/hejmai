@@ -1,7 +1,17 @@
 from pydantic import BaseModel, Field
 from datetime import date
-from typing import Optional
+from typing import List, Optional
 
+class ItemEntrada(BaseModel):
+    nome: str
+    categoria: str
+    unidade: str
+    preco_pago: float
+    data_validade: date
+
+class CompraEntrada(BaseModel):
+    local_compra: Optional[str] = "Mercado Desconhecido"
+    itens: List[ItemEntrada]
 
 # Classe base com os campos comuns
 class ItemBase(BaseModel):

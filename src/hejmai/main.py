@@ -1,7 +1,7 @@
 import datetime
 from typing import List
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from hejmai import models, schemas, database
 
@@ -15,15 +15,106 @@ app = FastAPI(title="Agente de Economia Doméstica")
 def read_root():
     return {"status": "Agente Online", "ano": 2026}
 
+@app.patch("/produtos/consumir/{produto_id}")
+async def consumir_produto(
+    produto_id: int, 
+    quantidade: float, 
+    db: Session = Depends(database.get_db)
+):
+    produto = db.query(models.Produto).filter(models.Produto.id == produto_id).first()
+    
+    if not produto:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+    
+    if produto.estoque_atual < quantidade:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Estoque insuficiente. Disponível: {produto.estoque_atual}"
+        )
 
-@app.post("/itens/", response_model=schemas.Item)
-def criar_item(item: schemas.ItemCreate, db: Session = Depends(database.get_db)):
-    db_item = models.Item(**item.model_dump())
-    db.add(db_item)
+    # Subtrai do estoque global do produto
+    produto.estoque_atual -= quantidade
+
     db.commit()
-    db.refresh(db_item)
-    return db_item
+    db.refresh(produto)
+    
+    return {
+        "mensagem": f"{quantidade} {produto.unidade_medida} de {produto.nome} consumidos.",
+        "estoque_restante": produto.estoque_atual
+    }
 
+@app.post("/compras/registrar-lote", status_code=status.HTTP_201_CREATED)
+async def registrar_compra_lote(compra_data: schemas.CompraEntrada, db: Session = Depends(database.get_db)):
+    try:
+        # 1. Criar o Registro da Compra (Cabeçalho)
+        nova_compra = models.Compra(
+            local_compra=compra_data.local_compra,
+            valor_total_nota=sum(item.preco_pago for item in compra_data.itens)
+        )
+        db.add(nova_compra)
+        db.flush() # Gera o ID da compra para usar nos itens
+
+        for item_in in compra_data.itens:
+            # 2. Lógica de Produto (Busca ou Cria)
+            # Usamos o nome normalizado para evitar duplicatas
+            nome_normalizado = item_in.nome.strip().title()
+            produto = db.query(models.Produto).filter(models.Produto.nome == nome_normalizado).first()
+            
+            if not produto:
+                produto = models.Produto(
+                    nome=nome_normalizado,
+                    categoria=item_in.categoria,
+                    unidade_medida=item_in.unidade,
+                    estoque_atual=0.0
+                )
+                db.add(produto)
+                db.flush()
+
+            # 3. Criar o Item da Compra (Histórico de Preço)
+            preco_uni = item_in.preco_pago / item_in.quantidade if item_in.quantidade > 0 else 0
+            
+            novo_item_compra = models.ItemCompra(
+                produto_id=produto.id,
+                compra_id=nova_compra.id,
+                quantidade=item_in.quantidade,
+                preco_unitario=preco_uni,
+                validade_especifica=item_in.data_validade
+            )
+            db.add(novo_item_compra)
+
+            # 4. Atualizar o Estado do Produto (Estoque e Validade)
+            produto.estoque_atual += item_in.quantidade
+            produto.ultima_validade = item_in.data_validade
+
+        db.commit()
+        return {"message": "Compra registrada e estoque atualizado!", "itens": len(compra_data.itens)}
+    
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erro ao processar compra: {str(e)}")
+
+@app.get("/produtos/alertas")
+async def listar_alertas(db: Session = Depends(database.get_db)):
+    hoje = datetime.date.today()
+    proxima_semana = hoje + datetime.timedelta(days=7)
+    
+    # 1. Produtos com estoque baixo (ex: menos de 1 unidade/kg)
+    estoque_baixo = db.query(models.Produto).filter(
+        models.Produto.estoque_atual < 1.0,
+        models.Produto.estoque_atual > 0 # Para não listar o que você já sabe que acabou
+    ).all()
+    
+    # 2. Produtos vencendo em breve
+    vencendo = db.query(models.Produto).filter(
+        models.Produto.ultima_validade <= proxima_semana,
+        models.Produto.ultima_validade >= hoje,
+        models.Produto.estoque_atual > 0
+    ).all()
+    
+    return {
+        "estoque_baixo": estoque_baixo,
+        "vencendo_em_breve": vencendo
+    }
 
 @app.patch("/itens/{item_id}/consumir")
 def consumir_item(
@@ -43,11 +134,6 @@ def consumir_item(
     db.commit()
     db.refresh(db_item)
     return db_item
-
-
-@app.get("/itens/", response_model=List[schemas.Item])
-def listar_itens(db: Session = Depends(database.get_db)):
-    return db.query(models.Item).filter(models.Item.status == "ativo").all()
 
 
 @app.get("/itens/vencendo/")
