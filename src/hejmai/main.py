@@ -1,19 +1,76 @@
 import datetime
 from typing import List
 
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import Body, FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from hejmai import models, schemas, database
+from hejmai import models, schemas, database, nlp
+from hejmai.validator import SanityChecker
 
 # Cria as tabelas no SQLite ao iniciar
 models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI(title="Agente de Economia Doméstica")
 
+processador_compras = nlp.ProcessadorCompras("mistral:latest")
+processador_receitas = nlp.Receitas("mistral:latest")
 
 @app.get("/")
 def read_root():
     return {"status": "Agente Online", "ano": 2026}
+
+@app.post("/processar-entrada-livre")
+async def processar_texto_bot(payload: dict = Body(...), db: Session = Depends(database.get_db)):
+    texto_bruto = payload.get("texto")
+    
+    # 1. Inteligência Artificial: Transforma texto em dados
+    dados_extraidos = await processador_compras.extrair_dados(texto_bruto)
+
+    # 2. Realiza o Sanity Check
+    todos_alertas = []
+    for item in dados_extraidos['itens']:
+        alertas = SanityChecker.validar_item(item)
+        todos_alertas.extend(alertas)
+
+    # 3. Persistência Relacional: Salva em Produto, Compra e ItemCompra
+    # Reaproveitamos a lógica de registrar_compra_lote que criamos antes
+    resultado = await registrar_compra_lote(
+        schemas.CompraEntrada(**dados_extraidos), 
+        db
+    )
+    
+    status_msg = "✅ Registro concluído."
+    if todos_alertas:
+        # Se houver alertas, mudamos o tom da mensagem para o Bot avisar você
+        status_msg = "⚠️ Registro feito com OBSERVAÇÕES:\n- " + "\n- ".join(todos_alertas)
+
+    return {
+        "status": "sucesso",
+        "dados_processados": dados_extraidos,
+        "mensagem_bot": f"{status_msg}\nRegistrado: {len(dados_extraidos['itens'])} itens no {dados_extraidos['local_compra'] or 'estoque'}."
+    }
+
+@app.get("/sugerir-receita")
+async def sugerir_receita(db: Session = Depends(database.get_db)):
+
+    vencendo = listar_itens_vencendo(db)
+
+    receita = await processador_receitas.sugerir_receita(vencendo)
+
+    return {
+        "status": "sucesso",
+        "receita": receita
+    }
+
+
+@app.get("/produtos/lista-compras")
+async def gerar_dados_lista(db: Session = Depends(database.get_db)):
+    # Filtramos produtos que estão abaixo de um limite aceitável (ex: 1.0)
+    # e ordenamos por categoria para facilitar a navegação no mercado
+    itens_em_falta = db.query(models.Produto).filter(
+        models.Produto.estoque_atual < 1.0
+    ).order_by(models.Produto.categoria).all()
+    
+    return itens_em_falta
 
 @app.patch("/produtos/consumir/{produto_id}")
 async def consumir_produto(

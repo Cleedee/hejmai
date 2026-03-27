@@ -6,6 +6,7 @@ class ItemEntrada(BaseModel):
     nome: str
     categoria: str
     unidade: str
+    quantidade: float
     preco_pago: float
     data_validade: date
 

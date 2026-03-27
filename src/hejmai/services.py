@@ -1,3 +1,7 @@
+import datetime
+
+from sqlalchemy.orm import Session
+
 from hejmai import models
 
 def registrar_compra_completa(dados_compra, db: Session):
