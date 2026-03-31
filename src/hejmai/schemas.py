@@ -39,6 +39,15 @@ class ProdutoUpdate(BaseModel):
     estoque_atual: Optional[float] = None
     ultima_validade: Optional[date] = None
 
+
+class UnificacaoProdutos(BaseModel):
+    """Schema para unificação de produtos similares."""
+    produto_principal_id: int = Field(description="ID do produto que será mantido")
+    produtos_para_unificar: List[int] = Field(
+        description="Lista de IDs de produtos que serão fundidos no produto principal"
+    )
+
+
 # Schema para validação da entrada
 class PerguntaIA(BaseModel):
     pergunta: str

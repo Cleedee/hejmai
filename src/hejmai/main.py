@@ -1,9 +1,10 @@
 import datetime
-from typing import List
+from typing import List, Dict
 import os
+from difflib import SequenceMatcher
 
 
-from fastapi import Body, FastAPI, Depends, HTTPException, status
+from fastapi import Body, FastAPI, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from dotenv import load_dotenv
@@ -128,6 +129,77 @@ async def performance_budget(db: Session = Depends(database.get_db)):
 async def listar_todos_produtos(db: Session = Depends(database.get_db)):
     produtos = db.query(models.Produto).all()
     return produtos
+
+
+@app.get("/produtos/similar")
+async def encontrar_produtos_similares(
+    limite_similaridade: float = Query(
+        default=0.6,
+        ge=0.0,
+        le=1.0,
+        description="Limiar de similaridade (0.0 a 1.0). Valores mais altos retornam apenas produtos muito similares."
+    ),
+    db: Session = Depends(database.get_db)
+):
+    """
+    Encontra grupos de produtos com nomes similares para possível unificação.
+    
+    Usa SequenceMatcher para calcular similaridade entre nomes de produtos.
+    Retorna grupos de produtos que têm similaridade acima do limiar configurado.
+    """
+    produtos = db.query(models.Produto).all()
+    
+    if not produtos:
+        return {"grupos": []}
+    
+    # Lista de produtos já processados
+    processados = set()
+    grupos_similares = []
+    
+    for i, produto_a in enumerate(produtos):
+        if produto_a.id in processados:
+            continue
+            
+        grupo = {
+            "produto_base": {
+                "id": produto_a.id,
+                "nome": produto_a.nome,
+                "categoria": produto_a.categoria,
+                "estoque_atual": produto_a.estoque_atual,
+            },
+            "similares": []
+        }
+        
+        for j, produto_b in enumerate(produtos):
+            if i >= j:  # Pula o próprio e já comparados
+                continue
+                
+            if produto_b.id in processados:
+                continue
+            
+            # Calcula similaridade entre os nomes (case-insensitive)
+            similaridade = SequenceMatcher(
+                None, 
+                produto_a.nome.lower(), 
+                produto_b.nome.lower()
+            ).ratio()
+            
+            if similaridade >= limite_similaridade:
+                grupo["similares"].append({
+                    "id": produto_b.id,
+                    "nome": produto_b.nome,
+                    "categoria": produto_b.categoria,
+                    "estoque_atual": produto_b.estoque_atual,
+                    "similaridade": round(similaridade, 2)
+                })
+                processados.add(produto_b.id)
+        
+        # Adiciona o grupo apenas se houver similares
+        if grupo["similares"]:
+            grupos_similares.append(grupo)
+            processados.add(produto_a.id)
+    
+    return {"grupos": grupos_similares}
 
 
 @app.get("/produtos/lista-compras-detalhada")
@@ -331,6 +403,124 @@ async def editar_produto(
         raise HTTPException(status_code=404, detail="Produto não encontrado")
 
     return produto
+
+
+@app.post("/produtos/unificar")
+async def unificar_produtos(
+    unificacao: schemas.UnificacaoProdutos,
+    db: Session = Depends(database.get_db)
+):
+    """
+    Unifica múltiplos produtos em um único produto principal.
+    
+    - Soma os estoques de todos os produtos no produto principal
+    - Atualiza a validade para a mais recente entre todos
+    - Transfere o histórico de compras (itens_compra) para o produto principal
+    - Remove os produtos unificados do banco
+    
+    Útil para consolidar produtos duplicados com nomes ligeiramente diferentes.
+    """
+    produto_principal_id = unificacao.produto_principal_id
+    produtos_para_unificar_ids = unificacao.produtos_para_unificar
+    
+    # Validações iniciais
+    if not produtos_para_unificar_ids:
+        raise HTTPException(
+            status_code=400, 
+            detail="Nenhum produto foi especificado para unificação"
+        )
+    
+    if produto_principal_id in produtos_para_unificar_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="O produto principal não pode estar na lista de produtos para unificar"
+        )
+    
+    # Busca o produto principal
+    produto_principal = db.query(models.Produto).filter(
+        models.Produto.id == produto_principal_id
+    ).first()
+    
+    if not produto_principal:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Produto principal (ID {produto_principal_id}) não encontrado"
+        )
+    
+    # Busca todos os produtos que serão unificados
+    produtos_secundarios = (
+        db.query(models.Produto)
+        .filter(models.Produto.id.in_(produtos_para_unificar_ids))
+        .all()
+    )
+    
+    if len(produtos_secundarios) != len(produtos_para_unificar_ids):
+        raise HTTPException(
+            status_code=404,
+            detail="Um ou mais produtos para unificar não foram encontrados"
+        )
+    
+    try:
+        estoque_total = produto_principal.estoque_atual or 0.0
+        validade_mais_recente = produto_principal.ultima_validade
+        
+        for produto_sec in produtos_secundarios:
+            # 1. Somar estoques
+            estoque_total += produto_sec.estoque_atual or 0.0
+            
+            # 2. Manter a validade mais recente
+            if produto_sec.ultima_validade:
+                if not validade_mais_recente or produto_sec.ultima_validade > validade_mais_recente:
+                    validade_mais_recente = produto_sec.ultima_validade
+            
+            # 3. Transferir histórico de compras (ItemCompra)
+            itens_compra = db.query(models.ItemCompra).filter(
+                models.ItemCompra.produto_id == produto_sec.id
+            ).all()
+            
+            for item in itens_compra:
+                item.produto_id = produto_principal_id
+            
+            # 4. Transferir movimentações
+            movimentacoes = db.query(models.Movimentacao).filter(
+                models.Movimentacao.produto_id == produto_sec.id
+            ).all()
+            
+            for mov in movimentacoes:
+                mov.produto_id = produto_principal_id
+            
+            # 5. Remover produto secundário
+            db.delete(produto_sec)
+        
+        # Atualiza produto principal com estoque consolidado e validade
+        produto_principal.estoque_atual = estoque_total
+        produto_principal.ultima_validade = validade_mais_recente
+        
+        # Cria registro de movimentação para auditoria
+        total_unificado = sum(p.estoque_atual or 0.0 for p in produtos_secundarios)
+        if total_unificado > 0:
+            mov_unificacao = models.Movimentacao(
+                produto_id=produto_principal_id,
+                quantidade=total_unificado,
+                tipo="UNIFICACAO",
+            )
+            db.add(mov_unificacao)
+        
+        db.commit()
+        
+        return {
+            "status": "sucesso",
+            "mensagem": f"{len(produtos_secundarios)} produtos unificados em '{produto_principal.nome}'",
+            "estoque_consolidado": estoque_total,
+            "produtos_removidos": len(produtos_secundarios),
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao unificar produtos: {str(e)}"
+        )
 
 
 @app.post("/compras/registrar-lote", status_code=status.HTTP_201_CREATED)
