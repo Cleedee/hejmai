@@ -30,3 +30,15 @@ class ItemEntrada(BaseModel):
 class CompraEntrada(BaseModel):
     local_compra: Optional[str] = "Mercado Desconhecido"
     itens: List[ItemEntrada]
+
+
+class ProdutoUpdate(BaseModel):
+    nome: Optional[str] = None
+    categoria: Optional[str] = None
+    unidade_medida: Optional[str] = None
+    estoque_atual: Optional[float] = None
+    ultima_validade: Optional[date] = None
+
+# Schema para validação da entrada
+class PerguntaIA(BaseModel):
+    pergunta: str

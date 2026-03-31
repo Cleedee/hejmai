@@ -10,10 +10,11 @@ from dotenv import load_dotenv
 
 from hejmai import models, schemas, database, nlp, crud
 from hejmai.validator import SanityChecker
+from hejmai.analista_ia import AnalistaEstoque
 
 load_dotenv()
 
-MODEL = os.getenv("MODEL")
+MODEL = os.getenv("MODEL") or "llama3"
 
 # Cria as tabelas no SQLite ao iniciar
 models.Base.metadata.create_all(bind=database.engine)
@@ -22,20 +23,51 @@ app = FastAPI(title="Agente de Economia Doméstica")
 
 processador_compras = nlp.ProcessadorCompras(model=MODEL)
 processador_receitas = nlp.Receitas(model=MODEL)
+analista_ia = AnalistaEstoque(model=MODEL)
 
 
 @app.get("/")
 def read_root():
     return {"status": "Agente Online", "ano": 2026}
 
+@app.post("/ia/perguntar")
+async def processar_pergunta_ia(payload: schemas.PerguntaIA, db: Session = Depends(database.get_db)):
+    """
+    Recebe uma pergunta em linguagem natural, converte para SQL,
+    executa no SQLite e retorna a interpretação da IA.
+    """
+    try:
+        # 1. O Analista faz a mágica (SQL -> Execução -> Resposta)
+        resposta, query_gerada = await analista_ia.responder_pergunta(payload.pergunta, db)
+        
+        # Log para debug no terminal do container
+        print(f"🤖 Pergunta: {payload.pergunta}")
+        print(f"💾 SQL Gerado: {query_gerada}")
+        
+        return {
+            "status": "sucesso",
+            "resposta": resposta,
+            "query": query_gerada  # Enviamos de volta para o Bot mostrar se for modo debug
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Erro interno no processamento da IA: {str(e)}"
+        )
+
+
 @app.get("/estoque/resumo-geral")
 async def resumo_estoque(db: Session = Depends(database.get_db)):
     # Buscamos todos os produtos com estoque positivo, ordenados por categoria
-    produtos = db.query(models.Produto).filter(
-        models.Produto.estoque_atual > 0
-    ).order_by(models.Produto.categoria, models.Produto.ultima_validade).all()
-    
+    produtos = (
+        db.query(models.Produto)
+        .filter(models.Produto.estoque_atual > 0)
+        .order_by(models.Produto.categoria, models.Produto.ultima_validade)
+        .all()
+    )
+
     return produtos
+
 
 @app.post("/categoria", status_code=status.HTTP_201_CREATED)
 async def create_categoria(
@@ -263,8 +295,15 @@ async def consumir_produto(
             detail=f"Estoque insuficiente. Disponível: {produto.estoque_atual}",
         )
 
-    # Subtrai do estoque global do produto
     produto.estoque_atual -= quantidade
+
+    nova_mov = models.Movimentacao(
+        produto_id=produto_id,
+        quantidade=-quantidade,
+        tipo="CONSUMO"
+    )
+
+    db.add(nova_mov)
 
     db.commit()
     db.refresh(produto)
@@ -273,6 +312,25 @@ async def consumir_produto(
         "mensagem": f"{quantidade} {produto.unidade_medida} de {produto.nome} consumidos.",
         "estoque_restante": produto.estoque_atual,
     }
+
+
+@app.patch("/produtos/{produto_id}")
+async def editar_produto(
+    produto_id: int,
+    update: schemas.ProdutoUpdate,
+    db: Session = Depends(database.get_db),
+):
+    dados = update.model_dump(exclude_unset=True)
+    if not dados:
+        raise HTTPException(
+            status_code=400, detail="Nenhum dado fornecido para atualização"
+        )
+
+    produto = crud.atualizar_produto(db, produto_id, dados)
+    if not produto:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+
+    return produto
 
 
 @app.post("/compras/registrar-lote", status_code=status.HTTP_201_CREATED)
