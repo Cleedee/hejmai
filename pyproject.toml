@@ -12,6 +12,7 @@ dependencies = [
     "fastapi>=0.135.2",
     "ollama>=0.6.1",
     "python-dotenv>=1.2.2",
+    "ruff>=0.15.8",
     "sqlalchemy>=2.0.48",
     "streamlit>=1.55.0",
     "uvicorn>=0.41.0",

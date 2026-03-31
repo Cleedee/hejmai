@@ -4,6 +4,7 @@ import os
 from difflib import get_close_matches
 
 import ollama
+from sqlalchemy.orm import Session
 
 from hejmai import models
 

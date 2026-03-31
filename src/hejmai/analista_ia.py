@@ -1,7 +1,6 @@
 import ollama
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-import datetime
 
 
 class AnalistaEstoque:
