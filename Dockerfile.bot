@@ -9,11 +9,11 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
+# Copia arquivos necessários para o build
+COPY pyproject.toml uv.lock README.md ./
+COPY src ./src
 
-COPY src/telegram_bot ./src/telegram_bot
-COPY src/hejmai ./src/hejmai
+RUN uv sync --frozen --no-dev
 
 ENV PYTHONPATH=/app/src
 ENV DATABASE_PATH=/app/data/estoque.db
@@ -21,11 +21,9 @@ ENV DATABASE_PATH=/app/data/estoque.db
 # Stage de desenvolvimento
 FROM base as development
 
-RUN uv sync --frozen
 CMD ["uv", "run", "python", "-m", "telegram_bot.main"]
 
 # Stage de produção
 FROM base as production
 
-RUN uv sync --frozen --no-dev
 CMD ["uv", "run", "python", "-m", "telegram_bot.main"]

@@ -9,10 +9,11 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
+# Copia arquivos necessários para o build
+COPY pyproject.toml uv.lock README.md ./
+COPY src ./src
 
-COPY src/interface ./src/interface
+RUN uv sync --frozen --no-dev
 
 ENV PYTHONPATH=/app/src
 ENV STREAMLIT_SERVER_PORT=8501
@@ -22,13 +23,11 @@ ENV STREAMLIT_SERVER_HEADLESS=true
 # Stage de desenvolvimento
 FROM base as development
 
-RUN uv sync --frozen
 EXPOSE 8501
 CMD ["uv", "run", "streamlit", "run", "src/interface/app.py", "--server.address", "0.0.0.0", "--server.port", "8501"]
 
 # Stage de produção
 FROM base as production
 
-RUN uv sync --frozen --no-dev
 EXPOSE 8501
 CMD ["uv", "run", "streamlit", "run", "src/interface/app.py", "--server.address", "0.0.0.0", "--server.port", "8501"]
