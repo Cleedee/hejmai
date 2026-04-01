@@ -1,0 +1,31 @@
+# Multi-stage build para Bot Telegram
+FROM python:3.14-slim as base
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
+
+COPY src/telegram_bot ./src/telegram_bot
+COPY src/hejmai ./src/hejmai
+
+ENV PYTHONPATH=/app/src
+ENV DATABASE_PATH=/app/data/estoque.db
+
+# Stage de desenvolvimento
+FROM base as development
+
+RUN uv sync --frozen
+CMD ["uv", "run", "python", "-m", "telegram_bot.main"]
+
+# Stage de produção
+FROM base as production
+
+RUN uv sync --frozen --no-dev
+CMD ["uv", "run", "python", "-m", "telegram_bot.main"]

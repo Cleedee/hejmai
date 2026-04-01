@@ -1,0 +1,34 @@
+# Multi-stage build para Interface Streamlit
+FROM python:3.14-slim as base
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
+
+COPY src/interface ./src/interface
+
+ENV PYTHONPATH=/app/src
+ENV STREAMLIT_SERVER_PORT=8501
+ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
+ENV STREAMLIT_SERVER_HEADLESS=true
+
+# Stage de desenvolvimento
+FROM base as development
+
+RUN uv sync --frozen
+EXPOSE 8501
+CMD ["uv", "run", "streamlit", "run", "src/interface/app.py", "--server.address", "0.0.0.0", "--server.port", "8501"]
+
+# Stage de produção
+FROM base as production
+
+RUN uv sync --frozen --no-dev
+EXPOSE 8501
+CMD ["uv", "run", "streamlit", "run", "src/interface/app.py", "--server.address", "0.0.0.0", "--server.port", "8501"]

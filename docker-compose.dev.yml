@@ -1,0 +1,79 @@
+# Configuração para desenvolvimento com hot reload
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      target: development
+    container_name: hejmai_api_dev
+    volumes:
+      - hejmai_data:/app/data
+      - ./src/hejmai:/app/src/hejmai:ro
+    environment:
+      - DATABASE_URL=sqlite:////app/data/estoque.db
+      - DATABASE_PATH=/app/data/estoque.db
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - MODEL=llama3
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - hejmai_network
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+      target: development
+    container_name: hejmai_bot_dev
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      - API_URL=http://api:8081
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - DATABASE_PATH=/app/data/estoque.db
+    volumes:
+      - hejmai_data:/app/data
+      - ./src/telegram_bot:/app/src/telegram_bot:ro
+      - ./src/hejmai:/app/src/hejmai:ro
+    restart: unless-stopped
+    networks:
+      - hejmai_network
+
+  interface:
+    build:
+      context: .
+      dockerfile: Dockerfile.interface
+      target: development
+    container_name: hejmai_streamlit_dev
+    ports:
+      - "8501:8501"
+    environment:
+      - API_URL=http://api:8081
+      - BROWSER=false
+      - SERVER_HEADLESS=true
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - ./src/interface:/app/src/interface:ro
+    restart: unless-stopped
+    networks:
+      - hejmai_network
+
+volumes:
+  hejmai_data:
+    name: hejmai_data_dev
+
+networks:
+  hejmai_network:
+    name: hejmai_network_dev
+    driver: bridge

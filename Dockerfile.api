@@ -1,0 +1,37 @@
+# Multi-stage build para API FastAPI
+FROM python:3.14-slim as base
+
+# Instala dependências do sistema
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Instala uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+WORKDIR /app
+
+# Cache de dependências
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
+
+# Copia código fonte
+COPY src/hejmai ./src/hejmai
+COPY main.py ./
+
+ENV PYTHONPATH=/app/src
+ENV DATABASE_PATH=/app/data/estoque.db
+
+# Stage de desenvolvimento
+FROM base as development
+
+RUN uv sync --frozen
+EXPOSE 8081
+CMD ["uv", "run", "uvicorn", "hejmai.main:app", "--host", "0.0.0.0", "--port", "8081", "--reload"]
+
+# Stage de produção
+FROM base as production
+
+RUN uv sync --frozen --no-dev
+EXPOSE 8081
+CMD ["uv", "run", "uvicorn", "hejmai.main:app", "--host", "0.0.0.0", "--port", "8081"]
