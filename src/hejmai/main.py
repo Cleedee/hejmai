@@ -587,6 +587,96 @@ async def registrar_compra_lote(
         )
 
 
+@app.delete("/compras/{compra_id}", status_code=status.HTTP_200_OK)
+async def excluir_compra(
+    compra_id: int,
+    db: Session = Depends(database.get_db)
+):
+    """
+    Exclui uma compra registrada e reverte o estoque dos produtos afetados.
+    
+    - Remove os itens da compra (ItemCompra)
+    - Subtrai as quantidades do estoque dos produtos
+    - Remove a compra (Compra)
+    - Cria movimentação de ajuste para auditoria
+    
+    Útil para corrigir registros incorretos ou duplicados.
+    """
+    # Busca a compra
+    compra = db.query(models.Compra).filter(
+        models.Compra.id == compra_id
+    ).first()
+    
+    if not compra:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Compra (ID {compra_id}) não encontrada"
+        )
+    
+    try:
+        # Busca os itens da compra para reverter o estoque
+        itens_compra = (
+            db.query(models.ItemCompra)
+            .filter(models.ItemCompra.compra_id == compra_id)
+            .all()
+        )
+        
+        produtos_afetados = []
+        
+        for item in itens_compra:
+            # Busca o produto
+            produto = db.query(models.Produto).filter(
+                models.Produto.id == item.produto_id
+            ).first()
+            
+            if produto:
+                # Reverte o estoque (subtrai a quantidade que foi adicionada)
+                produto.estoque_atual = max(0, produto.estoque_atual - item.quantidade)
+                produtos_afetados.append({
+                    "nome": produto.nome,
+                    "quantidade_removida": item.quantidade,
+                    "estoque_anterior": produto.estoque_atual + item.quantidade,
+                    "estoque_atual": produto.estoque_atual,
+                })
+            
+            # Remove o item da compra
+            db.delete(item)
+        
+        # Remove a compra
+        db.delete(compra)
+        
+        # Cria movimentação de ajuste para auditoria
+        if itens_compra:
+            mov_ajuste = models.Movimentacao(
+                produto_id=itens_compra[0].produto_id if len(itens_compra) == 1 else None,
+                quantidade=-sum(item.quantidade for item in itens_compra),
+                tipo="AJUSTE",
+            )
+            db.add(mov_ajuste)
+        
+        db.commit()
+        
+        return {
+            "status": "sucesso",
+            "mensagem": f"Compra {compra_id} excluída com sucesso",
+            "compra_excluida": {
+                "id": compra_id,
+                "local": compra.local_compra,
+                "data": compra.data_compra,
+                "valor_total": compra.valor_total_nota,
+            },
+            "produtos_afetados": produtos_afetados,
+            "itens_removidos": len(itens_compra),
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao excluir compra: {str(e)}"
+        )
+
+
 @app.get("/produtos/alertas")
 async def listar_alertas(db: Session = Depends(database.get_db)):
     hoje = datetime.date.today()
