@@ -3,17 +3,17 @@ from typing import List, Dict
 import os
 from difflib import SequenceMatcher
 
+# Carrega variáveis de ambiente ANTES de importar módulos que as utilizam
+from dotenv import load_dotenv
+load_dotenv()
 
 from fastapi import Body, FastAPI, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from dotenv import load_dotenv
 
 from hejmai import models, schemas, database, nlp, crud
 from hejmai.validator import SanityChecker
 from hejmai.analista_ia import AnalistaEstoque
-
-load_dotenv()
 
 MODEL = os.getenv("MODEL") or "llama3"
 
