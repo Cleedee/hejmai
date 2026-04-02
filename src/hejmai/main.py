@@ -3,10 +3,6 @@ from typing import List, Dict
 import os
 from difflib import SequenceMatcher
 
-# Carrega variáveis de ambiente ANTES de importar módulos que as utilizam
-from dotenv import load_dotenv
-load_dotenv()
-
 from fastapi import Body, FastAPI, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
