@@ -5,7 +5,7 @@ Módulos:
 - validators: Validações de dados de entrada
 """
 
-from hejmai.interface.utils.validators import validate_carga_manual
+from interface.utils.validators import validate_carga_manual
 
 __all__ = [
     "validate_carga_manual",

@@ -12,7 +12,7 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 
-from hejmai.interface.api_client import APIClient, NotFoundError
+from interface.api_client import APIClient, NotFoundError
 
 
 def render_price_chart(api: APIClient, produtos: list) -> None:

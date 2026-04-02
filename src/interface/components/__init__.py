@@ -7,9 +7,9 @@ Módulos:
 - budget: Componente de gerenciamento de orçamento
 """
 
-from hejmai.interface.components.nlp_processor import render_nlp_processor
-from hejmai.interface.components.product_charts import render_price_chart
-from hejmai.interface.components.budget import render_budget_manager
+from interface.components.nlp_processor import render_nlp_processor
+from interface.components.product_charts import render_price_chart
+from interface.components.budget import render_budget_manager
 
 __all__ = [
     "render_nlp_processor",

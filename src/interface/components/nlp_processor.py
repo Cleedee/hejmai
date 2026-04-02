@@ -11,8 +11,8 @@ Este componente fornece uma interface para:
 import streamlit as st
 import pandas as pd
 
-from hejmai.interface.api_client import APIClient, ConnectionError, ServerError
-from hejmai.interface.config import config
+from interface.api_client import APIClient, ConnectionError, ServerError
+from interface.config import config
 
 
 def render_nlp_processor(api: APIClient) -> None:

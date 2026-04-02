@@ -12,7 +12,7 @@ import httpx
 import time
 from typing import List, Dict, Any
 
-from .config import config
+from interface.config import config
 
 
 # =============================================================================
