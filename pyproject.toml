@@ -14,6 +14,7 @@ dependencies = [
     "ollama>=0.6.1",
     "python-dotenv>=1.2.2",
     "python-telegram-bot[job-queue]>=22.7",
+    "requests>=2.33.0",
     "ruff>=0.15.8",
     "sqlalchemy>=2.0.48",
     "streamlit>=1.55.0",
