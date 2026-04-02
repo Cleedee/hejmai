@@ -42,8 +42,6 @@ services:
       - DATABASE_PATH=/app/data/estoque.db
     volumes:
       - ./data:/app/data
-      - ./src/telegram_bot:/app/src/telegram_bot:ro
-      - ./src/hejmai:/app/src/hejmai:ro
     restart: unless-stopped
     networks:
       - hejmai_network

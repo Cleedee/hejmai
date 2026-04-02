@@ -21,9 +21,9 @@ ENV DATABASE_PATH=/app/data/estoque.db
 # Stage de desenvolvimento
 FROM base as development
 
-CMD ["uv", "run", "python", "-m", "telegram_bot.main"]
+CMD ["uv", "run", "python", "-m", "hejmai.telegram_bot"]
 
 # Stage de produção
 FROM base as production
 
-CMD ["uv", "run", "python", "-m", "telegram_bot.main"]
+CMD ["uv", "run", "python", "-m", "hejmai.telegram_bot"]

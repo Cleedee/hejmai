@@ -8,35 +8,30 @@ Executa:
 """
 
 import os
-import asyncio
-from pathlib import Path
-
-# Adiciona src ao PYTHONPATH
-src_path = Path(__file__).parent.parent.parent
-os.environ["PYTHONPATH"] = str(src_path)
-
+from telegram import Update
 from telegram.ext import Application, JobQueue
 
 from hejmai.telegram_bot.handlers import criar_bot
 
 
-async def main():
-    """Função principal assíncrona."""
+def start():
+    """Função de entrada para o script."""
+    token = os.getenv("TELEGRAM_TOKEN")
+    
+    if not token:
+        print("⚠️ TELEGRAM_TOKEN não configurado. Bot não será iniciado.")
+        print("Configure a variável TELEGRAM_TOKEN no .env ou docker-compose.yml")
+        return
+    
     print("🤖 Iniciando Bot do Telegram...")
     print(f"📡 API_URL: {os.getenv('API_URL', 'http://api:8081')}")
-
-    # Cria aplicação com job queue
-    job_queue = JobQueue()
-    app = criar_bot(job_queue=job_queue)
-
-    if app is None:
-        print("❌ Bot não configurado. Encerrando.")
-        return
-
-    # Inicia job queue
-    await job_queue.initialize()
-
-    # Inicia bot
+    
+    # Cria aplicação
+    app = Application.builder().token(token).build()
+    
+    # Configura handlers
+    criar_bot(app=app)
+    
     print("📡 Bot em execução. Pressione Ctrl+C para parar.")
     print("")
     print("📋 Comandos disponíveis:")
@@ -47,21 +42,10 @@ async def main():
     print("   /sugerir_jantar - Sugere receita")
     print("   /lista_compras - Gera lista de compras")
     print("   /pergunta - Pergunte à IA")
-
-    await app.initialize()
-    await app.start()
-
-    # Mantém rodando
-    while True:
-        await asyncio.sleep(1)
-
-
-def start():
-    """Função de entrada para o script."""
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\n👋 Bot encerrado.")
+    print("")
+    
+    # Inicia polling
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":

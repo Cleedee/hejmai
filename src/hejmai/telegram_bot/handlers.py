@@ -17,7 +17,8 @@ Comandos:
 import os
 import datetime
 import httpx
-from telegram import Update, ChatAction
+from telegram import Update
+from telegram.constants import ChatAction
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -397,23 +398,18 @@ async def job_relatorio_diario(context: ContextTypes.DEFAULT_TYPE) -> None:
 # Inicialização
 # =============================================================================
 
-def criar_bot(job_queue: JobQueue = None) -> Application:
+def criar_bot(app: Application) -> None:
     """
-    Cria e configura o bot do Telegram.
+    Configura o bot do Telegram com handlers e jobs.
 
     Args:
-        job_queue: JobQueue para agendamentos
-
-    Returns:
-        Application configurada
+        app: Aplicação do Telegram
     """
-    if not TOKEN:
-        print("⚠️ TELEGRAM_TOKEN não configurado. Bot não será iniciado.")
-        return None
-
-    app = Application.builder().token(TOKEN).build()
-
-    # Handlers de comandos
+    if not app:
+        print("⚠️ Aplicação não fornecida. Bot não será configurado.")
+        return
+    
+    # Adiciona handlers de comandos
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("estoque", comando_estoque))
     app.add_handler(CommandHandler("status", verificar_status))
@@ -428,14 +424,13 @@ def criar_bot(job_queue: JobQueue = None) -> Application:
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), registrar_compra))
 
     # Job agendado (diário às 08:00)
-    if job_queue:
-        job_queue.run_daily(
+    if app.job_queue:
+        import datetime
+        app.job_queue.run_daily(
             job_relatorio_diario,
-            hour=8,
-            minute=0,
+            time=datetime.time(hour=8, minute=0),
             name="relatorio_diario",
         )
         print("📅 Job diário agendado para 08:00")
 
     print("✅ Bot do Telegram configurado")
-    return app
