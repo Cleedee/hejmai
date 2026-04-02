@@ -646,10 +646,11 @@ async def excluir_compra(
         compra.data_exclusao = datetime.datetime.now(datetime.timezone.utc)
 
         # Cria movimentação de ajuste para auditoria
-        if itens_compra:
+        # Uma movimentação por produto afetado para rastreio correto
+        for item in itens_compra:
             mov_ajuste = models.Movimentacao(
-                produto_id=itens_compra[0].produto_id if len(itens_compra) == 1 else None,
-                quantidade=-sum(item.quantidade for item in itens_compra),
+                produto_id=item.produto_id,
+                quantidade=-item.quantidade,
                 tipo="AJUSTE",
             )
             db.add(mov_ajuste)
@@ -734,10 +735,11 @@ async def restaurar_compra(
         compra.data_exclusao = None
 
         # Cria movimentação de ajuste para auditoria
-        if itens_compra:
+        # Uma movimentação por produto afetado para rastreio correto
+        for item in itens_compra:
             mov_ajuste = models.Movimentacao(
-                produto_id=itens_compra[0].produto_id if len(itens_compra) == 1 else None,
-                quantidade=sum(item.quantidade for item in itens_compra),
+                produto_id=item.produto_id,
+                quantidade=item.quantidade,
                 tipo="AJUSTE",
             )
             db.add(mov_ajuste)

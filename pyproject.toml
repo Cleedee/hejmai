@@ -22,3 +22,8 @@ dependencies = [
 
 [project.scripts]
 dev = "hejmai.main:start"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
