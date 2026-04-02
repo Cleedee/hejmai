@@ -254,19 +254,23 @@ elif page == "📝 Carga Manual":
     
     # Botões de ação
     col_btn1, col_btn2 = st.columns([1, 4])
-    
+
     with col_btn1:
-        if st.button("🗑️ Limpar Tabela"):
+        if st.button("🗑️ Limpar Tabela", key="btn_limpar"):
+            # Resetar DataFrame para estado inicial
             st.session_state.df_carga = pd.DataFrame([{
                 "nome": "",
                 "categoria": "Mercearia",
                 "quantidade": 1.0,
                 "unidade": "un",
                 "preco_pago": 0.0,
-                "data_validade": date.today() + timedelta(days=90),
+                "data_validade": str(date.today() + timedelta(days=90)),
             }])
+            # Limpar também o editor se existir
+            if "editor_carga_manual" in st.session_state:
+                del st.session_state.editor_carga_manual
             st.rerun()
-    
+
     with col_btn2:
         if st.button("📥 Salvar Carga", type="primary"):
             # Filtrar linhas vazias
