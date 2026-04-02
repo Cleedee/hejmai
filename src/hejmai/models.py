@@ -47,6 +47,8 @@ class Compra(Base):
     local_compra = Column(String)  # Onde foi comprado (Mercado A, B)
     data_compra = Column(Date, default=datetime.date.today)
     valor_total_nota = Column(Float)
+    excluida = Column(Integer, default=0)  # 0 = ativa, 1 = excluída (exclusão lógica)
+    data_exclusao = Column(DateTime(timezone=True), nullable=True)  # Data da exclusão lógica
 
     itens = relationship("ItemCompra", back_populates="compra")
 

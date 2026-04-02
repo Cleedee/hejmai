@@ -100,6 +100,7 @@ async def performance_budget(db: Session = Depends(database.get_db)):
             .join(models.Compra)
             .filter(
                 models.Produto.categoria == lim.categoria,
+                models.Compra.excluida == 0,  # Apenas compras ativas
                 func.extract("month", models.Compra.data_compra) == mes_atual,
                 func.extract("year", models.Compra.data_compra) == ano_atual,
             )
@@ -234,7 +235,10 @@ async def historico_precos(produto_id: int, db: Session = Depends(database.get_d
     historico = (
         db.query(models.ItemCompra)
         .join(models.Compra)
-        .filter(models.ItemCompra.produto_id == produto_id)
+        .filter(
+            models.ItemCompra.produto_id == produto_id,
+            models.Compra.excluida == 0,  # Apenas compras ativas
+        )
         .order_by(models.Compra.data_compra)
         .all()
     )
@@ -528,6 +532,7 @@ async def registrar_compra_lote(
         nova_compra = models.Compra(
             local_compra=compra_data.local_compra,
             valor_total_nota=sum(item.preco_pago for item in compra_data.itens),
+            excluida=0,  # Compra ativa por padrão
         )
         db.add(nova_compra)
         db.flush()  # Gera o ID da compra para usar nos itens
@@ -589,26 +594,27 @@ async def excluir_compra(
     db: Session = Depends(database.get_db)
 ):
     """
-    Exclui uma compra registrada e reverte o estoque dos produtos afetados.
-    
-    - Remove os itens da compra (ItemCompra)
-    - Subtrai as quantidades do estoque dos produtos
-    - Remove a compra (Compra)
+    Faz exclusão lógica de uma compra registrada e reverte o estoque dos produtos afetados.
+
+    - Marca a compra como excluída (excluida=1)
+    - Registra data da exclusão
+    - Reverte o estoque dos produtos (subtrai quantidades)
     - Cria movimentação de ajuste para auditoria
-    
-    Útil para corrigir registros incorretos ou duplicados.
+
+    A compra não aparece mais nas consultas, mas permanece no banco para auditoria.
     """
-    # Busca a compra
+    # Busca a compra (apenas se não estiver já excluída)
     compra = db.query(models.Compra).filter(
-        models.Compra.id == compra_id
+        models.Compra.id == compra_id,
+        models.Compra.excluida == 0
     ).first()
-    
+
     if not compra:
         raise HTTPException(
             status_code=404,
-            detail=f"Compra (ID {compra_id}) não encontrada"
+            detail=f"Compra (ID {compra_id}) não encontrada ou já está excluída"
         )
-    
+
     try:
         # Busca os itens da compra para reverter o estoque
         itens_compra = (
@@ -616,15 +622,15 @@ async def excluir_compra(
             .filter(models.ItemCompra.compra_id == compra_id)
             .all()
         )
-        
+
         produtos_afetados = []
-        
+
         for item in itens_compra:
             # Busca o produto
             produto = db.query(models.Produto).filter(
                 models.Produto.id == item.produto_id
             ).first()
-            
+
             if produto:
                 # Reverte o estoque (subtrai a quantidade que foi adicionada)
                 produto.estoque_atual = max(0, produto.estoque_atual - item.quantidade)
@@ -634,13 +640,11 @@ async def excluir_compra(
                     "estoque_anterior": produto.estoque_atual + item.quantidade,
                     "estoque_atual": produto.estoque_atual,
                 })
-            
-            # Remove o item da compra
-            db.delete(item)
-        
-        # Remove a compra
-        db.delete(compra)
-        
+
+        # Faz exclusão lógica da compra
+        compra.excluida = 1
+        compra.data_exclusao = datetime.datetime.now(datetime.timezone.utc)
+
         # Cria movimentação de ajuste para auditoria
         if itens_compra:
             mov_ajuste = models.Movimentacao(
@@ -649,28 +653,142 @@ async def excluir_compra(
                 tipo="AJUSTE",
             )
             db.add(mov_ajuste)
-        
+
         db.commit()
-        
+
         return {
             "status": "sucesso",
-            "mensagem": f"Compra {compra_id} excluída com sucesso",
+            "mensagem": f"Compra {compra_id} marcada como excluída",
             "compra_excluida": {
                 "id": compra_id,
                 "local": compra.local_compra,
                 "data": compra.data_compra,
                 "valor_total": compra.valor_total_nota,
+                "data_exclusao": compra.data_exclusao.isoformat(),
             },
             "produtos_afetados": produtos_afetados,
-            "itens_removidos": len(itens_compra),
+            "itens_afetados": len(itens_compra),
         }
-        
+
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=500,
             detail=f"Erro ao excluir compra: {str(e)}"
         )
+
+
+@app.patch("/compras/{compra_id}/restaurar", status_code=status.HTTP_200_OK)
+async def restaurar_compra(
+    compra_id: int,
+    db: Session = Depends(database.get_db)
+):
+    """
+    Restaura uma compra que foi excluída logicamente.
+
+    - Marca a compra como ativa (excluida=0)
+    - Limpa a data de exclusão
+    - Reaplica o estoque dos produtos
+
+    Útil para desfazer exclusões acidentais.
+    """
+    # Busca a compra excluída
+    compra = db.query(models.Compra).filter(
+        models.Compra.id == compra_id,
+        models.Compra.excluida == 1
+    ).first()
+
+    if not compra:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Compra (ID {compra_id}) não encontrada ou não está excluída"
+        )
+
+    try:
+        # Busca os itens da compra para reaplicar o estoque
+        itens_compra = (
+            db.query(models.ItemCompra)
+            .filter(models.ItemCompra.compra_id == compra_id)
+            .all()
+        )
+
+        produtos_afetados = []
+
+        for item in itens_compra:
+            produto = db.query(models.Produto).filter(
+                models.Produto.id == item.produto_id
+            ).first()
+
+            if produto:
+                estoque_anterior = produto.estoque_atual
+                produto.estoque_atual += item.quantidade
+                produtos_afetados.append({
+                    "nome": produto.nome,
+                    "quantidade_adicionada": item.quantidade,
+                    "estoque_anterior": estoque_anterior,
+                    "estoque_atual": produto.estoque_atual,
+                })
+
+        # Restaura a compra
+        compra.excluida = 0
+        compra.data_exclusao = None
+
+        # Cria movimentação de ajuste para auditoria
+        if itens_compra:
+            mov_ajuste = models.Movimentacao(
+                produto_id=itens_compra[0].produto_id if len(itens_compra) == 1 else None,
+                quantidade=sum(item.quantidade for item in itens_compra),
+                tipo="AJUSTE",
+            )
+            db.add(mov_ajuste)
+
+        db.commit()
+
+        return {
+            "status": "sucesso",
+            "mensagem": f"Compra {compra_id} restaurada com sucesso",
+            "compra_restaurada": {
+                "id": compra_id,
+                "local": compra.local_compra,
+                "data": compra.data_compra,
+                "valor_total": compra.valor_total_nota,
+            },
+            "produtos_afetados": produtos_afetados,
+            "itens_afetados": len(itens_compra),
+        }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao restaurar compra: {str(e)}"
+        )
+
+
+@app.get("/compras/excluidas")
+async def listar_compras_excluidas(db: Session = Depends(database.get_db)):
+    """
+    Lista todas as compras que foram excluídas logicamente.
+
+    Útil para auditoria e para permitir restauração de exclusões acidentais.
+    """
+    compras = (
+        db.query(models.Compra)
+        .filter(models.Compra.excluida == 1)
+        .order_by(models.Compra.data_exclusao.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": c.id,
+            "local_compra": c.local_compra,
+            "data_compra": c.data_compra,
+            "valor_total_nota": c.valor_total_nota,
+            "data_exclusao": c.data_exclusao.isoformat() if c.data_exclusao else None,
+        }
+        for c in compras
+    ]
 
 
 @app.get("/produtos/alertas")
