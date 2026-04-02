@@ -13,7 +13,9 @@
 - **Previsão de Gastos**: Estimativa de custos para reposição de estoque
 - **Budget por Categoria**: Definição de limites de gastos mensais
 - **Sugestão de Receitas**: IA sugere receitas com base em itens próximos do vencimento
-- **Interface de Teste NLP**: Playground para testar extração de texto com Ollama
+- **Vigia do Estoque**: Monitora burn rate e envia alertas via Telegram
+- **Bot Telegram**: Comandos para consultar estoque, registrar consumo, gerar listas
+- **Interface Streamlit**: Dashboard interativo para gestão completa
 
 ## Stack Tecnológico
 
@@ -32,24 +34,39 @@
 ```
 hejmai/
 ├── src/
-│   ├── hejmai/              # Código principal da API
+│   ├── hejmai/                  # Código principal da API
 │   │   ├── __init__.py
-│   │   ├── main.py          # App FastAPI + rotas
-│   │   ├── models.py        # Modelos SQLAlchemy
-│   │   ├── schemas.py       # Schemas Pydantic
-│   │   ├── database.py      # Configuração do banco
-│   │   ├── crud.py          # Operações de banco
-│   │   ├── nlp.py           # Integração com Ollama
-│   │   ├── validator.py     # Validação de dados (Sanity Check)
-│   │   ├── analista_ia.py   # Analista de estoque com IA
-│   │   ├── services.py      # Serviços de negócio
-│   │   └── scripts/         # Scripts de migração
-│   └── interface/
-│       └── app.py           # Interface Streamlit
-├── main.py                  # Entry point (placeholder)
-├── pyproject.toml           # Dependências e config do projeto
-├── web.sh                   # Script para rodar Streamlit
-└── estoque.db               # Banco de dados SQLite
+│   │   ├── main.py              # App FastAPI + rotas
+│   │   ├── models.py            # Modelos SQLAlchemy
+│   │   ├── schemas.py           # Schemas Pydantic
+│   │   ├── database.py          # Configuração do banco
+│   │   ├── crud.py              # Operações de banco
+│   │   ├── nlp.py               # Integração com Ollama
+│   │   ├── validator.py         # Validação de dados (Sanity Check)
+│   │   ├── analista_ia.py       # Analista de estoque com IA
+│   │   ├── services.py          # Serviços de negócio
+│   │   ├── telegram_bot/        # Bot do Telegram
+│   │   │   ├── __init__.py
+│   │   │   ├── __main__.py      # Entry point do bot
+│   │   │   └── handlers.py      # Handlers de comandos
+│   │   ├── interface/           # Interface Streamlit
+│   │   │   ├── __init__.py
+│   │   │   ├── app.py           # App principal
+│   │   │   ├── config.py        # Configurações
+│   │   │   ├── api_client.py    # Cliente HTTP
+│   │   │   ├── components/      # Componentes reutilizáveis
+│   │   │   └── utils/           # Utilitários
+│   │   ├── vigia_estoque/       # Vigia do Estoque
+│   │   │   ├── __init__.py
+│   │   │   ├── analise_consumo.py  # Análise de burn rate
+│   │   │   └── vigia.py         # Script principal
+│   │   └── scripts/             # Scripts de migração
+│   └── telegram_bot/            # (Legado - será removido)
+├── main.py                      # Entry point (placeholder)
+├── pyproject.toml               # Dependências e config do projeto
+├── web.sh                       # Script para rodar Streamlit
+└── data/
+    └── estoque.db               # Banco de dados SQLite
 ```
 
 ## Comandos de Build e Execução
@@ -75,12 +92,22 @@ A API estará disponível em `http://localhost:8081` com docs em `http://localho
 ### Iniciar Interface Web (Streamlit)
 
 ```bash
-uv run streamlit run src/interface/app.py --server.headless true
+uv run streamlit run src/hejmai/interface/app.py --server.headless true
 ```
 
 Ou usar o script:
 ```bash
 ./web.sh
+```
+
+### Iniciar Bot do Telegram
+
+```bash
+# Via script definido no pyproject.toml
+uv run telegram
+
+# Ou diretamente
+uv run python -m hejmai.telegram_bot
 ```
 
 ### Variáveis de Ambiente

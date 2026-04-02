@@ -23,6 +23,7 @@ dependencies = [
 
 [project.scripts]
 dev = "hejmai.main:start"
+telegram = "hejmai.telegram_bot.__main__:start"
 
 [dependency-groups]
 dev = [
