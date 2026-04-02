@@ -6,7 +6,7 @@ services:
       target: production
     container_name: hejmai_api
     volumes:
-      - hejmai_data:/app/data
+      - ./data:/app/data
     environment:
       - DATABASE_URL=sqlite:////app/data/estoque.db
       - DATABASE_PATH=/app/data/estoque.db
@@ -39,7 +39,7 @@ services:
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - DATABASE_PATH=/app/data/estoque.db
     volumes:
-      - hejmai_data:/app/data
+      - ./data:/app/data
     restart: unless-stopped
     networks:
       - hejmai_network
@@ -62,10 +62,6 @@ services:
     restart: unless-stopped
     networks:
       - hejmai_network
-
-volumes:
-  hejmai_data:
-    name: hejmai_data
 
 networks:
   hejmai_network:

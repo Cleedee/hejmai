@@ -7,7 +7,7 @@ services:
       target: development
     container_name: hejmai_api_dev
     volumes:
-      - hejmai_data:/app/data
+      - ./data:/app/data
       - ./src/hejmai:/app/src/hejmai:ro
     environment:
       - DATABASE_URL=sqlite:////app/data/estoque.db
@@ -41,7 +41,7 @@ services:
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - DATABASE_PATH=/app/data/estoque.db
     volumes:
-      - hejmai_data:/app/data
+      - ./data:/app/data
       - ./src/telegram_bot:/app/src/telegram_bot:ro
       - ./src/hejmai:/app/src/hejmai:ro
     restart: unless-stopped
@@ -68,10 +68,6 @@ services:
     restart: unless-stopped
     networks:
       - hejmai_network
-
-volumes:
-  hejmai_data:
-    name: hejmai_data_dev
 
 networks:
   hejmai_network:
