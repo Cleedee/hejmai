@@ -8,8 +8,8 @@ Módulos principais:
 - utils: Utilitários (validadores)
 """
 
-from interface.config import config, Config
-from interface.api_client import (
+from hejmai.interface.config import config, Config
+from hejmai.interface.api_client import (
     APIClient,
     APIError,
     ConnectionError,
@@ -18,12 +18,12 @@ from interface.api_client import (
     BadRequestError,
     UnauthorizedError,
 )
-from interface.components import (
+from hejmai.interface.components import (
     render_nlp_processor,
     render_price_chart,
     render_budget_manager,
 )
-from interface.utils import validate_carga_manual
+from hejmai.interface.utils import validate_carga_manual
 
 __all__ = [
     # Config

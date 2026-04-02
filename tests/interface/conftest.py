@@ -145,7 +145,7 @@ def sample_df_carga_invalid():
 @pytest.fixture
 def api_client():
     """Fixture com instância do APIClient."""
-    from src.interface.api_client import APIClient
+    from hejmai.interface.api_client import APIClient
     return APIClient()
 
 

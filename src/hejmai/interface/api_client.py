@@ -12,7 +12,7 @@ import httpx
 import time
 from typing import List, Dict, Any
 
-from interface.config import config
+from hejmai.interface.config import config
 
 
 # =============================================================================
@@ -115,6 +115,7 @@ class APIClient:
             method: Método HTTP (GET, POST, PUT, DELETE, PATCH)
             endpoint: Endpoint da API (ex: '/categorias')
             **kwargs: Argumentos adicionais para httpx.request()
+                      Se 'timeout' for fornecido, sobrescreve o timeout padrão.
         
         Returns:
             httpx.Response: Resposta da requisição
@@ -125,12 +126,15 @@ class APIClient:
         last_error: Exception | None = None
         url = f"{self.base_url}{endpoint}"
         
+        # Usa timeout dos kwargs se fornecido, caso contrário usa o timeout da instância
+        if 'timeout' not in kwargs:
+            kwargs['timeout'] = self.timeout
+        
         for tentativa in range(config.MAX_RETRY_TENTATIVAS):
             try:
                 response = httpx.request(
                     method=method,
                     url=url,
-                    timeout=self.timeout,
                     **kwargs
                 )
                 

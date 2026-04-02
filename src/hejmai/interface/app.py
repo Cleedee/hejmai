@@ -16,14 +16,14 @@ from datetime import date, timedelta
 import pandas as pd
 
 # Imports absolutos para funcionar com Streamlit
-from interface.config import config
-from interface.api_client import APIClient, ConnectionError, ServerError
-from interface.components import (
+from hejmai.interface.config import config
+from hejmai.interface.api_client import APIClient, ConnectionError, ServerError
+from hejmai.interface.components import (
     render_nlp_processor,
     render_price_chart,
     render_budget_manager,
 )
-from interface.utils import validate_carga_manual
+from hejmai.interface.utils import validate_carga_manual
 
 
 # =============================================================================

@@ -10,7 +10,7 @@ Este componente fornece:
 
 import streamlit as st
 
-from interface.api_client import APIClient
+from hejmai.interface.api_client import APIClient
 
 
 def render_budget_manager(api: APIClient) -> None:

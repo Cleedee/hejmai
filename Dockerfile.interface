@@ -15,8 +15,8 @@ COPY src ./src
 
 RUN uv sync --frozen --no-dev
 
-# PYTHONPATH inclui /app para imports absolutos (hejmai.interface.*)
-ENV PYTHONPATH=/app:/app/src
+# PYTHONPATH inclui /app/src para imports absolutos (hejmai.interface.*)
+ENV PYTHONPATH=/app/src
 ENV STREAMLIT_SERVER_PORT=8501
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
 ENV STREAMLIT_SERVER_HEADLESS=true
@@ -25,10 +25,10 @@ ENV STREAMLIT_SERVER_HEADLESS=true
 FROM base as development
 
 EXPOSE 8501
-CMD ["uv", "run", "streamlit", "run", "src/interface/app.py", "--server.address", "0.0.0.0", "--server.port", "8501"]
+CMD ["uv", "run", "streamlit", "run", "src/hejmai/interface/app.py", "--server.address", "0.0.0.0", "--server.port", "8501"]
 
 # Stage de produção
 FROM base as production
 
 EXPOSE 8501
-CMD ["uv", "run", "streamlit", "run", "src/interface/app.py", "--server.address", "0.0.0.0", "--server.port", "8501"]
+CMD ["uv", "run", "streamlit", "run", "src/hejmai/interface/app.py", "--server.address", "0.0.0.0", "--server.port", "8501"]
