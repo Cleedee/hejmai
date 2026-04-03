@@ -289,6 +289,39 @@ async def gerar_lista_orcada(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"❌ Erro ao gerar lista: {e}")
 
 
+async def comando_ultimas_compras(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lista as últimas compras realizadas."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{API_URL}/compras/recentes?limite=5")
+            response.raise_for_status()
+            compras = response.json()
+
+        if not compras:
+            await update.message.reply_text("📭 Nenhuma compra registrada ainda.")
+            return
+
+        texto = "🛒 *Últimas Compras Realizadas*\n\n"
+
+        for i, compra in enumerate(compras, 1):
+            data_formatada = datetime.datetime.strptime(
+                compra["data_compra"], "%Y-%m-%d"
+            ).strftime("%d/%m/%Y")
+
+            texto += f"*{i}. {compra['local_compra']}*\n"
+            texto += f"   📅 {data_formatada}\n"
+            texto += f"   💰 R$ {compra['valor_total_nota']:.2f}\n"
+            texto += f"   📦 {compra['quantidade_itens']} itens\n\n"
+
+        total_geral = sum(c["valor_total_nota"] for c in compras)
+        texto += f"💵 *Total (últimas {len(compras)} compras): R$ {total_geral:.2f}*"
+
+        await update.message.reply_text(texto, parse_mode="Markdown")
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ Erro ao buscar compras: {e}")
+
+
 async def comando_pergunta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Faz pergunta em linguagem natural para a IA."""
     pergunta = " ".join(context.args)
@@ -418,6 +451,7 @@ def criar_bot(app: Application) -> None:
     app.add_handler(CommandHandler("usar", usar_item))
     app.add_handler(CommandHandler("sugerir_jantar", sugerir_jantar))
     app.add_handler(CommandHandler("lista_compras", gerar_lista_orcada))
+    app.add_handler(CommandHandler("ultimas_compras", comando_ultimas_compras))
     app.add_handler(CommandHandler("pergunta", comando_pergunta))
 
     # Handler de mensagens de texto (NLP)

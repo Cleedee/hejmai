@@ -372,14 +372,28 @@ class APIClient:
     def get_performance_budget(self) -> List[Dict[str, Any]]:
         """
         Busca performance de orçamento por categoria.
-        
+
         Returns:
             Lista de categorias com limite, gasto real e porcentagem.
         """
         response = self._request_with_retry("GET", "/relatorios/performance-budget")
         self._handle_response(response)
         return response.json()
-    
+
+    def get_compras_recentes(self, limite: int = 5) -> List[Dict[str, Any]]:
+        """
+        Busca as últimas compras realizadas.
+
+        Args:
+            limite: Número de compras a retornar (1-20).
+
+        Returns:
+            Lista de compras com id, local, data, valor_total e quantidade_itens.
+        """
+        response = self._request_with_retry("GET", f"/compras/recentes?limite={limite}")
+        self._handle_response(response)
+        return response.json()
+
     # ==========================================================================
     # Endpoint - Saúde da API
     # ==========================================================================

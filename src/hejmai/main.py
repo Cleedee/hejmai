@@ -793,6 +793,36 @@ async def listar_compras_excluidas(db: Session = Depends(database.get_db)):
     ]
 
 
+@app.get("/compras/recentes")
+async def listar_compras_recentes(
+    limite: int = Query(default=5, ge=1, le=20, description="Número de compras a retornar (1-20)"),
+    db: Session = Depends(database.get_db)
+):
+    """
+    Lista as últimas compras realizadas (não excluídas).
+    
+    Retorna local, data e valor total de cada compra.
+    """
+    compras = (
+        db.query(models.Compra)
+        .filter(models.Compra.excluida == 0)
+        .order_by(models.Compra.data_compra.desc(), models.Compra.id.desc())
+        .limit(limite)
+        .all()
+    )
+
+    return [
+        {
+            "id": c.id,
+            "local_compra": c.local_compra,
+            "data_compra": c.data_compra,
+            "valor_total_nota": c.valor_total_nota,
+            "quantidade_itens": len(c.itens) if c.itens else 0,
+        }
+        for c in compras
+    ]
+
+
 @app.get("/produtos/alertas")
 async def listar_alertas(db: Session = Depends(database.get_db)):
     hoje = datetime.date.today()
