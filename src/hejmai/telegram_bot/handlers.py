@@ -322,6 +322,76 @@ async def comando_ultimas_compras(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text(f"❌ Erro ao buscar compras: {e}")
 
 
+async def comando_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Gera e envia backup do banco de dados e configurações.
+    
+    Uso: /backup
+    """
+    user_id = update.effective_chat.id
+    
+    # Verificar se é o dono do bot
+    if CHAT_ID_PESSOAL and str(user_id) != str(CHAT_ID_PESSOAL):
+        await update.message.reply_text("🔒 Este comando é restrito ao administrador.")
+        return
+    
+    await update.message.reply_text(
+        "📦 Gerando backup...\n_Isso pode levar alguns segundos._",
+        parse_mode="Markdown",
+    )
+    
+    try:
+        import tarfile
+        import tempfile
+        import os
+        
+        # Caminhos dos arquivos
+        db_path = os.getenv("DATABASE_PATH", "/app/data/estoque.db")
+        env_path = "/app/.env"
+        
+        # Criar arquivo temporário
+        with tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False) as tmp:
+            backup_path = tmp.name
+        
+        # Criar tar.gz
+        with tarfile.open(backup_path, "w:gz") as tar:
+            if os.path.exists(db_path):
+                tar.add(db_path, arcname="estoque.db")
+            if os.path.exists(env_path):
+                tar.add(env_path, arcname=".env")
+        
+        # Verificar se há arquivos no backup
+        backup_size = os.path.getsize(backup_path)
+        if backup_size < 100:  # Menor que 100 bytes = vazio
+            await update.message.reply_text("❌ Nenhum arquivo encontrado para backup.")
+            os.unlink(backup_path)
+            return
+        
+        # Enviar arquivo
+        with open(backup_path, "rb") as f:
+            await update.message.reply_document(
+                document=f,
+                filename=f"hejmai_backup_{datetime.date.today().strftime('%Y%m%d')}.tar.gz",
+                caption=(
+                    "📦 *Backup do Hejmai*\n\n"
+                    "Contém:\n"
+                    "• `estoque.db` - Banco de dados\n"
+                    "• `.env` - Configurações\n\n"
+                    "Para restaurar:\n"
+                    "1. Extraia os arquivos\n"
+                    "2. Coloque no diretório do projeto\n"
+                    "3. Execute: `docker-compose up -d`"
+                ),
+                parse_mode="Markdown",
+            )
+        
+        # Limpar arquivo temporário
+        os.unlink(backup_path)
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ Erro ao gerar backup: {e}")
+
+
 async def comando_pergunta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Faz pergunta em linguagem natural para a IA."""
     pergunta = " ".join(context.args)
@@ -383,6 +453,8 @@ Posso te ajudar a gerenciar seu estoque doméstico.
 • /estoque - Ver inventário completo
 • /status - Ver alertas (vencimento/estoque)
 • /vigia - Relatório do Vigia do Estoque
+• /ultimas_compras - Ver últimas compras
+• /backup - 📦 Baixar banco + configurações
 • /usar - Registrar consumo (ex: /usar 2 leite)
 • /sugerir_jantar - Sugere receita
 • /lista_compras - Gera lista de compras
@@ -452,6 +524,7 @@ def criar_bot(app: Application) -> None:
     app.add_handler(CommandHandler("sugerir_jantar", sugerir_jantar))
     app.add_handler(CommandHandler("lista_compras", gerar_lista_orcada))
     app.add_handler(CommandHandler("ultimas_compras", comando_ultimas_compras))
+    app.add_handler(CommandHandler("backup", comando_backup))
     app.add_handler(CommandHandler("pergunta", comando_pergunta))
 
     # Handler de mensagens de texto (NLP)
