@@ -1,0 +1,193 @@
+# =============================================================================
+# OpenAPI Specification - Hejmai API
+# =============================================================================
+# Índice mestre que referencia todos os schemas e paths
+# =============================================================================
+
+openapi: "3.0.3"
+
+info:
+  title: "Hejmai - Agente de Economia Doméstica"
+  description: |
+    API REST para gestão de despensa e planejamento de refeições com foco em economia doméstica.
+    
+    ## Funcionalidades
+    - Gestão de estoque com controle de validade
+    - Registro de compras via texto livre (NLP com Ollama)
+    - Histórico de preços por produto e local
+    - Previsão de gastos para reposição
+    - Sugestão de receitas com IA
+    - Unificação de produtos similares
+    - Exclusão lógica de compras
+    
+    ## Autenticação
+    Esta API não requer autenticação.
+  version: "0.1.0"
+  contact:
+    name: "Hejmai Team"
+    url: "https://github.com/claudiotorcato/hejmai"
+
+servers:
+  - url: "http://localhost:8081"
+    description: "Servidor de desenvolvimento"
+  - url: "https://api.hejmai.local"
+    description: "Servidor de produção"
+
+tags:
+  - name: "status"
+    description: "Status do servidor"
+  - name: "produtos"
+    description: "Gestão de produtos e estoque"
+  - name: "compras"
+    description: "Registro e consulta de compras"
+  - name: "categorias"
+    description: "Categorias de produtos"
+  - name: "relatorios"
+    description: "Relatórios e análises"
+  - name: "ia"
+    description: "Processamento com IA (Ollama)"
+
+paths:
+  # Status
+  /:
+    $ref: "./paths/status.yaml#/root"
+
+  # Produtos
+  /produtos/todos:
+    $ref: "./paths/produtos.yaml#/produtos_todos"
+  /produtos/alertas:
+    $ref: "./paths/produtos.yaml#/produtos_alertas"
+  /produtos/similar:
+    $ref: "./paths/produtos.yaml#/produtos_similar"
+  /produtos/lista-compras:
+    $ref: "./paths/produtos.yaml#/produtos_lista_compras"
+  /produtos/lista-compras-detalhada:
+    $ref: "./paths/produtos.yaml#/produtos_lista_detalhada"
+  /produtos/consumir/{produto_id}:
+    $ref: "./paths/produtos.yaml#/produtos_consumir"
+  /produtos/{produto_id}:
+    $ref: "./paths/produtos.yaml#/produtos_update"
+  /produtos/unificar:
+    $ref: "./paths/produtos.yaml#/produtos_unificar"
+
+  # Compras
+  /compras/registrar-lote:
+    $ref: "./paths/compras.yaml#/compras_registrar_lote"
+  /compras/{compra_id}:
+    $ref: "./paths/compras.yaml#/compras_excluir"
+  /compras/{compra_id}/restaurar:
+    $ref: "./paths/compras.yaml#/compras_restaurar"
+  /compras/excluidas:
+    $ref: "./paths/compras.yaml#/compras_excluidas"
+  /compras/recentes:
+    $ref: "./paths/compras.yaml#/compras_recentes"
+
+  # Categorias
+  /categorias:
+    $ref: "./paths/categorias.yaml#/categorias_list"
+  /categoria:
+    $ref: "./paths/categorias.yaml#/categoria_create"
+
+  # Relatórios
+  /relatorios/historico-precos/{produto_id}:
+    $ref: "./paths/relatorios.yaml#/relatorios_historico_precos"
+  /relatorios/previsao-gastos:
+    $ref: "./paths/relatorios.yaml#/relatorios_previsao_gastos"
+  /relatorios/performance-budget:
+    $ref: "./paths/relatorios.yaml#/relatorios_performance_budget"
+  /sugerir-receita:
+    $ref: "./paths/relatorios.yaml#/relatorios_sugerir_receita"
+  /estoque/resumo-geral:
+    $ref: "./paths/relatorios.yaml#/relatorio_estoque_geral"
+
+  # IA
+  /ia/perguntar:
+    $ref: "./paths/ia.yaml#/ia_perguntar"
+  /processar-entrada-livre:
+    $ref: "./paths/ia.yaml#/processar_entrada_livre"
+
+components:
+  schemas:
+    # Comuns
+    Error:
+      $ref: "./schemas/common.yaml#/Error"
+    StatusResponse:
+      $ref: "./schemas/common.yaml#/StatusResponse"
+
+    # Produtos
+    Produto:
+      $ref: "./schemas/produto.yaml#/Produto"
+    ProdutoUpdate:
+      $ref: "./schemas/produto.yaml#/ProdutoUpdate"
+    ProdutoSimilar:
+      $ref: "./schemas/produto.yaml#/ProdutoSimilar"
+    ProdutoSimilarGrupo:
+      $ref: "./schemas/produto.yaml#/ProdutoSimilarGrupo"
+
+    # Compras
+    CompraEntrada:
+      $ref: "./schemas/compra.yaml#/CompraEntrada"
+    ItemEntrada:
+      $ref: "./schemas/compra.yaml#/ItemEntrada"
+    CompraResumo:
+      $ref: "./schemas/compra.yaml#/CompraResumo"
+    CompraExcluidaResumo:
+      $ref: "./schemas/compra.yaml#/CompraExcluidaResumo"
+
+    # Categorias
+    Categoria:
+      $ref: "./schemas/categoria.yaml#/Categoria"
+    CategoriaCreate:
+      $ref: "./schemas/categoria.yaml#/CategoriaCreate"
+
+    # Relatórios
+    HistoricoPreco:
+      $ref: "./schemas/relatorios.yaml#/HistoricoPreco"
+    PrevisaoGastos:
+      $ref: "./schemas/relatorios.yaml#/PrevisaoGastos"
+    ItemPrevisao:
+      $ref: "./schemas/relatorios.yaml#/ItemPrevisao"
+    PerformanceBudget:
+      $ref: "./schemas/relatorios.yaml#/PerformanceBudget"
+    ReceitaSugestao:
+      $ref: "./schemas/relatorios.yaml#/ReceitaSugestao"
+    AlertasEstoque:
+      $ref: "./schemas/relatorios.yaml#/AlertasEstoque"
+    ListaComprasDetalhada:
+      $ref: "./schemas/relatorios.yaml#/ListaComprasDetalhada"
+
+    # Unificação e IA
+    UnificacaoProdutos:
+      $ref: "./schemas/unificacao.yaml#/UnificacaoProdutos"
+    UnificacaoResultado:
+      $ref: "./schemas/unificacao.yaml#/UnificacaoResultado"
+    ConsumoProduto:
+      $ref: "./schemas/unificacao.yaml#/ConsumoProduto"
+    PerguntaIA:
+      $ref: "./schemas/unificacao.yaml#/PerguntaIA"
+    RespostaIA:
+      $ref: "./schemas/unificacao.yaml#/RespostaIA"
+    EntradaLivre:
+      $ref: "./schemas/unificacao.yaml#/EntradaLivre"
+    ProcessamentoEntrada:
+      $ref: "./schemas/unificacao.yaml#/ProcessamentoEntrada"
+
+  responses:
+    BadRequest:
+      description: "Requisição inválida"
+      content:
+        application/json:
+          schema:
+            $ref: "./schemas/common.yaml#/Error"
+    NotFound:
+      description: "Recurso não encontrado"
+      content:
+        application/json:
+          schema:
+            $ref: "./schemas/common.yaml#/Error"
+    InternalError:
+      description: "Erro interno do servidor"
+      content:
+        application/json:
+          schema:
+            $ref: "./schemas/common.yaml#/Error"

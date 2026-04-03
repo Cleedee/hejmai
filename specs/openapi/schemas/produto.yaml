@@ -1,0 +1,91 @@
+# =============================================================================
+# Schema: Produto - Hejmai API
+# =============================================================================
+
+Produto:
+  type: object
+  properties:
+    id:
+      type: integer
+      description: Identificador único do produto
+      example: 1
+    nome:
+      type: string
+      description: Nome do produto
+      example: "Arroz Integral"
+    categoria:
+      type: string
+      description: Categoria do produto
+      example: "Mercearia"
+    unidade_medida:
+      type: string
+      description: Unidade de medida (kg, un, l, g, ml, pct, cx)
+      example: "kg"
+    estoque_atual:
+      type: number
+      format: float
+      description: Quantidade atual em estoque
+      example: 5.0
+    ultima_validade:
+      type: string
+      format: date
+      description: Data de validade
+      example: "2026-12-31"
+
+ProdutoUpdate:
+  type: object
+  properties:
+    nome:
+      type: string
+      nullable: true
+      example: "Arroz Integral"
+    categoria:
+      type: string
+      nullable: true
+      example: "Mercearia"
+    unidade_medida:
+      type: string
+      nullable: true
+      example: "kg"
+    estoque_atual:
+      type: number
+      format: float
+      nullable: true
+      example: 5.0
+    ultima_validade:
+      type: string
+      format: date
+      nullable: true
+      example: "2026-12-31"
+
+ProdutoSimilar:
+  type: object
+  properties:
+    id:
+      type: integer
+      example: 15
+    nome:
+      type: string
+      example: "Arroz integral"
+    categoria:
+      type: string
+      example: "Mercearia"
+    estoque_atual:
+      type: number
+      format: float
+      example: 2.0
+    similaridade:
+      type: number
+      format: float
+      description: Índice de similaridade (0.0 a 1.0)
+      example: 0.97
+
+ProdutoSimilarGrupo:
+  type: object
+  properties:
+    produto_base:
+      $ref: "./produto.yaml#/Produto"
+    similares:
+      type: array
+      items:
+        $ref: "./produto.yaml#/ProdutoSimilar"

@@ -1,0 +1,107 @@
+# =============================================================================
+# Schema: Unificação e IA - Hejmai API
+# =============================================================================
+
+UnificacaoProdutos:
+  type: object
+  required:
+    - produto_principal_id
+    - produtos_para_unificar
+  properties:
+    produto_principal_id:
+      type: integer
+      description: ID do produto que será mantido
+      example: 1
+    produtos_para_unificar:
+      type: array
+      items:
+        type: integer
+      description: IDs dos produtos que serão fundidos
+      example: [15, 23]
+
+UnificacaoResultado:
+  type: object
+  properties:
+    status:
+      type: string
+      example: "sucesso"
+    mensagem:
+      type: string
+      example: "2 produtos unificados em 'Arroz Integral'"
+    estoque_consolidado:
+      type: number
+      format: float
+      description: Estoque total após unificação
+      example: 7.0
+    produtos_removidos:
+      type: integer
+      description: Quantidade de produtos removidos
+      example: 2
+
+ConsumoProduto:
+  type: object
+  properties:
+    mensagem:
+      type: string
+      example: "2.0 kg de Arroz Integral consumidos."
+    estoque_restante:
+      type: number
+      format: float
+      description: Estoque após consumo
+      example: 3.0
+
+PerguntaIA:
+  type: object
+  required:
+    - pergunta
+  properties:
+    pergunta:
+      type: string
+      description: Pergunta em linguagem natural
+      example: "Quanto gastei com carne este mês?"
+
+RespostaIA:
+  type: object
+  properties:
+    status:
+      type: string
+      example: "sucesso"
+    resposta:
+      type: string
+      description: Resposta da IA
+      example: "Você gastou R$ 150,00 com carne este mês."
+    query:
+      type: string
+      description: Query SQL gerada
+      example: "SELECT SUM(...) FROM ..."
+
+EntradaLivre:
+  type: object
+  required:
+    - texto
+  properties:
+    texto:
+      type: string
+      description: Texto descrevendo a compra
+      example: "Comprei 2kg de carne por R$ 50 no Mercado A"
+
+ProcessamentoEntrada:
+  type: object
+  properties:
+    status:
+      type: string
+      example: "sucesso"
+    dados_processados:
+      type: object
+      description: Dados extraídos pela IA
+      properties:
+        local_compra:
+          type: string
+          example: "Mercado A"
+        itens:
+          type: array
+          items:
+            $ref: "./compra.yaml#/ItemEntrada"
+    mensagem_bot:
+      type: string
+      example: "✅ Registro concluído. Registrado: 3 itens no Mercado A."

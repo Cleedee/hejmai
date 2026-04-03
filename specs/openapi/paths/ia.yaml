@@ -1,0 +1,54 @@
+# =============================================================================
+# Paths: IA (Inteligência Artificial) - Hejmai API
+# =============================================================================
+
+ia_perguntar:
+  post:
+    summary: "Perguntar à IA"
+    description: |
+      Recebe uma pergunta em linguagem natural, converte para SQL,
+      executa no banco de dados e retorna a interpretação da IA.
+    operationId: "processarPerguntaIA"
+    tags:
+      - "ia"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/PerguntaIA"
+    responses:
+      "200":
+        description: "Resposta da IA"
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/RespostaIA"
+      "500":
+        $ref: "../openapi.yaml#/components/responses/InternalError"
+
+processar_entrada_livre:
+  post:
+    summary: "Processar entrada de texto livre"
+    description: |
+      Recebe texto descrevendo uma compra em linguagem natural,
+      usa IA (Ollama) para extrair itens, quantidades e preços,
+      e registra a compra no sistema.
+    operationId: "processarEntradaLivre"
+    tags:
+      - "ia"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/EntradaLivre"
+    responses:
+      "200":
+        description: "Texto processado e compra registrada"
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/ProcessamentoEntrada"
+      "500":
+        $ref: "../openapi.yaml#/components/responses/InternalError"

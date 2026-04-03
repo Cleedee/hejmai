@@ -1,0 +1,154 @@
+# =============================================================================
+# Paths: Compras - Hejmai API
+# =============================================================================
+
+compras_registrar_lote:
+  post:
+    summary: "Registrar compra em lote"
+    description: "Registra uma compra completa com múltiplos itens, atualizando estoque automaticamente."
+    operationId: "registrarCompraLote"
+    tags:
+      - "compras"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/CompraEntrada"
+    responses:
+      "201":
+        description: "Compra registrada com sucesso"
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Compra registrada e estoque atualizado!"
+                itens:
+                  type: integer
+                  description: "Quantidade de itens registrados"
+                  example: 5
+      "500":
+        $ref: "../openapi.yaml#/components/responses/InternalError"
+
+compras_excluir:
+  delete:
+    summary: "Excluir compra (exclusão lógica)"
+    description: "Marca uma compra como excluída e reverte o estoque dos produtos afetados."
+    operationId: "excluirCompra"
+    tags:
+      - "compras"
+    parameters:
+      - name: "compra_id"
+        in: "path"
+        required: true
+        description: "ID da compra"
+        schema:
+          type: integer
+    responses:
+      "200":
+        description: "Compra excluída com sucesso"
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: "sucesso"
+                mensagem:
+                  type: string
+                  example: "Compra 5 marcada como excluída"
+                compra_excluida:
+                  $ref: "../openapi.yaml#/components/schemas/CompraResumo"
+                produtos_afetados:
+                  type: array
+                  items:
+                    type: object
+                itens_afetados:
+                  type: integer
+      "404":
+        $ref: "../openapi.yaml#/components/responses/NotFound"
+
+compras_restaurar:
+  patch:
+    summary: "Restaurar compra excluída"
+    description: "Restaura uma compra que foi excluída logicamente, reaplicando o estoque."
+    operationId: "restaurarCompra"
+    tags:
+      - "compras"
+    parameters:
+      - name: "compra_id"
+        in: "path"
+        required: true
+        description: "ID da compra"
+        schema:
+          type: integer
+    responses:
+      "200":
+        description: "Compra restaurada com sucesso"
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: "sucesso"
+                mensagem:
+                  type: string
+                  example: "Compra 5 restaurada com sucesso"
+                compra_restaurada:
+                  $ref: "../openapi.yaml#/components/schemas/CompraResumo"
+                produtos_afetados:
+                  type: array
+                  items:
+                    type: object
+      "404":
+        $ref: "../openapi.yaml#/components/responses/NotFound"
+
+compras_excluidas:
+  get:
+    summary: "Listar compras excluídas"
+    description: "Lista todas as compras que foram excluídas logicamente (para auditoria)."
+    operationId: "listarComprasExcluidas"
+    tags:
+      - "compras"
+    responses:
+      "200":
+        description: "Lista de compras excluídas"
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "../openapi.yaml#/components/schemas/CompraExcluidaResumo"
+
+compras_recentes:
+  get:
+    summary: "Listar compras recentes"
+    description: "Lista as últimas compras realizadas (não excluídas), ordenadas por data."
+    operationId: "listarComprasRecentes"
+    tags:
+      - "compras"
+    parameters:
+      - name: "limite"
+        in: "query"
+        description: "Número de compras a retornar (1-20)"
+        required: false
+        schema:
+          type: integer
+          default: 5
+          minimum: 1
+          maximum: 20
+    responses:
+      "200":
+        description: "Lista de compras recentes"
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "../openapi.yaml#/components/schemas/CompraResumo"

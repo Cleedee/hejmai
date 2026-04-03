@@ -1,0 +1,127 @@
+# =============================================================================
+# Schema: Relatórios - Hejmai API
+# =============================================================================
+
+HistoricoPreco:
+  type: object
+  properties:
+    data:
+      type: string
+      format: date
+      description: Data da compra
+      example: "2026-04-02"
+    preco:
+      type: number
+      format: float
+      description: Preço unitário pago
+      example: 7.75
+    local:
+      type: string
+      description: Local da compra
+      example: "Mercado Extra"
+
+PrevisaoGastos:
+  type: object
+  properties:
+    valor_total_estimado:
+      type: number
+      format: float
+      description: Estimativa total para reposição
+      example: 150.50
+    itens:
+      type: array
+      items:
+        $ref: "#/ItemPrevisao"
+
+ItemPrevisao:
+  type: object
+  properties:
+    produto:
+      type: string
+      description: Nome do produto
+      example: "Arroz Integral"
+    ultimo_preco:
+      type: number
+      format: float
+      description: Último preço pago
+      example: 7.75
+    custo_estimado:
+      type: number
+      format: float
+      description: Custo estimado para reposição
+      example: 7.75
+
+PerformanceBudget:
+  type: object
+  properties:
+    categoria:
+      type: string
+      description: Nome da categoria
+      example: "Açougue"
+    limite:
+      type: number
+      format: float
+      description: Limite de orçamento
+      example: 500.00
+    real:
+      type: number
+      format: float
+      description: Valor já gasto
+      example: 450.00
+    porcentagem:
+      type: number
+      format: float
+      description: Porcentagem do limite utilizada
+      example: 90.0
+
+ReceitaSugestao:
+  type: object
+  properties:
+    status:
+      type: string
+      example: "sucesso"
+    receita:
+      type: string
+      description: Receita sugerida pela IA
+      example: "Use o leite e o queijo para fazer um macarrão gratinado..."
+
+AlertasEstoque:
+  type: object
+  properties:
+    estoque_baixo:
+      type: array
+      items:
+        $ref: "./produto.yaml#/Produto"
+      description: Produtos com estoque baixo
+    vencendo_em_breve:
+      type: array
+      items:
+        $ref: "./produto.yaml#/Produto"
+      description: Produtos próximos do vencimento
+
+ListaComprasDetalhada:
+  type: array
+  items:
+    $ref: "#/ItemListaCompras"
+
+ItemListaCompras:
+  type: object
+  properties:
+    nome:
+      type: string
+      example: "Arroz Integral"
+    categoria:
+      type: string
+      example: "Mercearia"
+    preco_referencia:
+      type: number
+      format: float
+      description: Último preço pago
+      example: 7.75
+    estoque:
+      type: number
+      format: float
+      example: 0.5
+    unidade:
+      type: string
+      example: "kg"

@@ -1,0 +1,188 @@
+# =============================================================================
+# Paths: Produtos - Hejmai API
+# =============================================================================
+
+produtos_todos:
+  get:
+    summary: "Listar todos os produtos"
+    description: "Retorna todos os produtos cadastrados no sistema."
+    operationId: "listarTodosProdutos"
+    tags:
+      - "produtos"
+    responses:
+      "200":
+        description: "Lista de produtos"
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "../openapi.yaml#/components/schemas/Produto"
+
+produtos_alertas:
+  get:
+    summary: "Listar alertas de produtos"
+    description: "Retorna produtos com estoque baixo ou vencendo em breve."
+    operationId: "listarAlertas"
+    tags:
+      - "produtos"
+    responses:
+      "200":
+        description: "Alertas de estoque"
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/AlertasEstoque"
+
+produtos_similar:
+  get:
+    summary: "Encontrar produtos similares"
+    description: "Encontra grupos de produtos com nomes similares para possível unificação."
+    operationId: "encontrarProdutosSimilares"
+    tags:
+      - "produtos"
+    parameters:
+      - name: "limite_similaridade"
+        in: "query"
+        description: "Limiar de similaridade (0.0 a 1.0)"
+        required: false
+        schema:
+          type: number
+          format: float
+          default: 0.6
+          minimum: 0
+          maximum: 1
+    responses:
+      "200":
+        description: "Grupos de produtos similares"
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                grupos:
+                  type: array
+                  items:
+                    $ref: "../openapi.yaml#/components/schemas/ProdutoSimilarGrupo"
+
+produtos_lista_compras:
+  get:
+    summary: "Lista de compras (produtos faltando)"
+    description: "Retorna produtos com estoque abaixo de 1.0 para gerar lista de compras."
+    operationId: "gerarListaCompras"
+    tags:
+      - "produtos"
+    responses:
+      "200":
+        description: "Lista de produtos faltando"
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "../openapi.yaml#/components/schemas/Produto"
+
+produtos_lista_detalhada:
+  get:
+    summary: "Lista de compras detalhada"
+    description: "Retorna produtos faltando com preço de referência para orçamento."
+    operationId: "gerarListaDetalhada"
+    tags:
+      - "produtos"
+    responses:
+      "200":
+        description: "Lista detalhada com preços"
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/ListaComprasDetalhada"
+
+produtos_consumir:
+  patch:
+    summary: "Registrar consumo de produto"
+    description: "Reduz o estoque de um produto registrando seu consumo."
+    operationId: "consumirProduto"
+    tags:
+      - "produtos"
+    parameters:
+      - name: "produto_id"
+        in: "path"
+        required: true
+        description: "ID do produto"
+        schema:
+          type: integer
+      - name: "quantidade"
+        in: "query"
+        required: true
+        description: "Quantidade consumida"
+        schema:
+          type: number
+          format: float
+    responses:
+      "200":
+        description: "Consumo registrado"
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/ConsumoProduto"
+      "404":
+        $ref: "../openapi.yaml#/components/responses/NotFound"
+      "400":
+        $ref: "../openapi.yaml#/components/responses/BadRequest"
+
+produtos_update:
+  patch:
+    summary: "Atualizar produto"
+    description: "Atualiza informações de um produto existente."
+    operationId: "editarProduto"
+    tags:
+      - "produtos"
+    parameters:
+      - name: "produto_id"
+        in: "path"
+        required: true
+        description: "ID do produto"
+        schema:
+          type: integer
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ProdutoUpdate"
+    responses:
+      "200":
+        description: "Produto atualizado"
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Produto"
+      "404":
+        $ref: "../openapi.yaml#/components/responses/NotFound"
+      "400":
+        $ref: "../openapi.yaml#/components/responses/BadRequest"
+
+produtos_unificar:
+  post:
+    summary: "Unificar produtos similares"
+    description: "Fundir múltiplos produtos em um único produto principal."
+    operationId: "unificarProdutos"
+    tags:
+      - "produtos"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/UnificacaoProdutos"
+    responses:
+      "200":
+        description: "Produtos unificados"
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/UnificacaoResultado"
+      "400":
+        $ref: "../openapi.yaml#/components/responses/BadRequest"
+      "404":
+        $ref: "../openapi.yaml#/components/responses/NotFound"

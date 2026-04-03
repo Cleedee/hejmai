@@ -1,0 +1,93 @@
+# =============================================================================
+# Paths: Relatórios - Hejmai API
+# =============================================================================
+
+relatorios_historico_precos:
+  get:
+    summary: "Histórico de preços do produto"
+    description: "Retorna o histórico de preços pagos por produto, ordenado por data."
+    operationId: "historicoPrecos"
+    tags:
+      - "relatorios"
+    parameters:
+      - name: "produto_id"
+        in: "path"
+        required: true
+        description: "ID do produto"
+        schema:
+          type: integer
+    responses:
+      "200":
+        description: "Histórico de preços"
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "../openapi.yaml#/components/schemas/HistoricoPreco"
+      "404":
+        $ref: "../openapi.yaml#/components/responses/NotFound"
+
+relatorios_previsao_gastos:
+  get:
+    summary: "Previsão de gastos"
+    description: "Estima custos para reposição de produtos com estoque baixo."
+    operationId: "preverGastos"
+    tags:
+      - "relatorios"
+    responses:
+      "200":
+        description: "Previsão de gastos"
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/PrevisaoGastos"
+
+relatorios_performance_budget:
+  get:
+    summary: "Performance vs orçamento"
+    description: "Retorna o consumo de orçamento por categoria vs limite definido."
+    operationId: "performanceBudget"
+    tags:
+      - "relatorios"
+    responses:
+      "200":
+        description: "Performance de orçamento"
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "../openapi.yaml#/components/schemas/PerformanceBudget"
+
+relatorios_sugerir_receita:
+  get:
+    summary: "Sugerir receita"
+    description: "IA sugere receita com base em produtos próximos do vencimento."
+    operationId: "sugerirReceita"
+    tags:
+      - "relatorios"
+    responses:
+      "200":
+        description: "Receita sugerida"
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/ReceitaSugestao"
+
+relatorio_estoque_geral:
+  get:
+    summary: "Resumo geral do estoque"
+    description: "Retorna produtos com estoque positivo, ordenados por categoria."
+    operationId: "resumoEstoque"
+    tags:
+      - "relatorios"
+    responses:
+      "200":
+        description: "Resumo do estoque"
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "../openapi.yaml#/components/schemas/Produto"

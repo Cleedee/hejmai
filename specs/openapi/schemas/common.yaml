@@ -1,0 +1,23 @@
+# =============================================================================
+# Schemas Comuns - Hejmai API
+# =============================================================================
+
+Error:
+  type: object
+  required:
+    - detail
+  properties:
+    detail:
+      type: string
+      description: Mensagem de erro
+      example: "Produto não encontrado"
+
+StatusResponse:
+  type: object
+  properties:
+    status:
+      type: string
+      example: "sucesso"
+    mensagem:
+      type: string
+      example: "Operação realizada com sucesso"

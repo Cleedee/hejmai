@@ -1,0 +1,94 @@
+# =============================================================================
+# Schema: Compra - Hejmai API
+# =============================================================================
+
+CompraEntrada:
+  type: object
+  required:
+    - itens
+  properties:
+    local_compra:
+      type: string
+      description: Nome do estabelecimento
+      default: "Mercado Desconhecido"
+      example: "Mercado Extra"
+    itens:
+      type: array
+      items:
+        $ref: "#/ItemEntrada"
+      description: Lista de itens comprados
+
+ItemEntrada:
+  type: object
+  required:
+    - nome
+    - categoria
+    - unidade
+    - quantidade
+    - preco_pago
+    - data_validade
+  properties:
+    nome:
+      type: string
+      description: Nome do produto
+      example: "Arroz Integral"
+    categoria:
+      type: string
+      description: Categoria do produto
+      example: "Mercearia"
+    unidade:
+      type: string
+      description: Unidade de medida
+      example: "kg"
+    quantidade:
+      type: number
+      format: float
+      description: Quantidade comprada
+      example: 2.0
+    preco_pago:
+      type: number
+      format: float
+      description: Preço total pago pelo item
+      example: 15.50
+    data_validade:
+      type: string
+      format: date
+      description: Data de validade estimada
+      example: "2026-12-31"
+
+CompraResumo:
+  type: object
+  properties:
+    id:
+      type: integer
+      example: 5
+    local_compra:
+      type: string
+      example: "Mercado Extra"
+    data_compra:
+      type: string
+      format: date
+      example: "2026-04-02"
+    valor_total_nota:
+      type: number
+      format: float
+      example: 150.50
+    excluida:
+      type: integer
+      description: 0 = ativa, 1 = excluída
+      example: 0
+    data_exclusao:
+      type: string
+      format: date-time
+      nullable: true
+      example: null
+
+CompraExcluidaResumo:
+  allOf:
+    - $ref: "#/CompraResumo"
+    - type: object
+      properties:
+        data_exclusao:
+          type: string
+          format: date-time
+          example: "2026-04-02T10:30:00Z"

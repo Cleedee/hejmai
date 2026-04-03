@@ -1,0 +1,27 @@
+# =============================================================================
+# Paths: Status - Hejmai API
+# =============================================================================
+
+root:
+  get:
+    summary: "Status do servidor"
+    description: "Verifica se a API está online e operacional."
+    operationId: "readRoot"
+    tags:
+      - "status"
+    responses:
+      "200":
+        description: "API online"
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: "Agente Online"
+                ano:
+                  type: integer
+                  example: 2026
+      "500":
+        $ref: "../openapi.yaml#/components/responses/InternalError"
