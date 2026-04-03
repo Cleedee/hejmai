@@ -134,8 +134,8 @@ MODEL=llama3
 # ===========================================
 # Telegram Bot
 # ===========================================
-TELEGRAM_TOKEN=8605596954:AAG30vmp0PQVvJkfLcF1qsLvGUclgh9NTKo
-TELEGRAM_CHAT_ID=103694315
+TELEGRAM_TOKEN=
+TELEGRAM_CHAT_ID=
 
 # ===========================================
 # Interface
