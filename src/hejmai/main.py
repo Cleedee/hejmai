@@ -853,6 +853,64 @@ async def listar_alertas(db: Session = Depends(database.get_db)):
     return {"estoque_baixo": estoque_baixo, "vencendo_em_breve": vencendo}
 
 
+@app.put("/compras/{compra_id}", status_code=status.HTTP_200_OK)
+async def editar_compra(
+    compra_id: int,
+    update: schemas.CompraUpdate,
+    db: Session = Depends(database.get_db)
+):
+    """
+    Edita uma compra existente.
+    
+    Permite alterar o local de compra e/ou a data da compra.
+    Não altera os itens da compra - para isso, exclua e registre novamente.
+    """
+    compra = db.query(models.Compra).filter(models.Compra.id == compra_id).first()
+    
+    if not compra:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Compra (ID {compra_id}) não encontrada"
+        )
+    
+    try:
+        # Obtém os campos enviados (apenas os não-None)
+        dados = update.model_dump(exclude_unset=True)
+        
+        if not dados:
+            raise HTTPException(
+                status_code=400,
+                detail="Nenhum dado fornecido para atualização"
+            )
+        
+        # Aplica as atualizações
+        for campo, valor in dados.items():
+            setattr(compra, campo, valor)
+        
+        db.commit()
+        db.refresh(compra)
+        
+        return {
+            "status": "sucesso",
+            "mensagem": f"Compra {compra_id} atualizada com sucesso",
+            "compra": {
+                "id": compra.id,
+                "local_compra": compra.local_compra,
+                "data_compra": compra.data_compra,
+                "valor_total_nota": compra.valor_total_nota,
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao atualizar compra: {str(e)}"
+        )
+
+
 def start():
     import uvicorn
 

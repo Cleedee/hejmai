@@ -32,6 +32,11 @@ class CompraEntrada(BaseModel):
     itens: List[ItemEntrada]
 
 
+class CompraUpdate(BaseModel):
+    local_compra: Optional[str] = None
+    data_compra: Optional[date] = None
+
+
 class ProdutoUpdate(BaseModel):
     nome: Optional[str] = None
     categoria: Optional[str] = None
@@ -42,6 +47,7 @@ class ProdutoUpdate(BaseModel):
 
 class UnificacaoProdutos(BaseModel):
     """Schema para unificação de produtos similares."""
+
     produto_principal_id: int = Field(description="ID do produto que será mantido")
     produtos_para_unificar: List[int] = Field(
         description="Lista de IDs de produtos que serão fundidos no produto principal"

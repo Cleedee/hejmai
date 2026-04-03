@@ -152,3 +152,31 @@ compras_recentes:
               type: array
               items:
                 $ref: "../openapi.yaml#/components/schemas/CompraResumo"
+
+compras_editar:
+  put:
+    summary: "Editar compras"
+    description: "Editar compras"
+    operationId: "editarCompras"
+    tags:
+      - "compras"
+    parameters:
+      - name: "compra_id"
+        in: "path"
+        required: true
+        description: "ID da compra"
+        schema:
+          type: integer
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/CompraUpdate"
+    responses:
+      "200":
+        description: "Compra atualizada com sucesso"
+      "404":
+        description: "Compra não encontrada"
+      "422":
+        description: "Erro na validação de dados enviados"

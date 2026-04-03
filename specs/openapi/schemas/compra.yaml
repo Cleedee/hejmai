@@ -18,6 +18,20 @@ CompraEntrada:
         $ref: "#/ItemEntrada"
       description: Lista de itens comprados
 
+CompraUpdate:
+  type: object
+  properties:
+    local_compra:
+      type: string
+      description: Nome do estabelecimento
+      default: "Mercado Desconhecido"
+      example: "Carvalho"
+    data_compra:
+      type: string
+      format: date
+      description: Dia da Compra
+      example: "2026-12-31"
+
 ItemEntrada:
   type: object
   required:
