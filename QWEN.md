@@ -62,11 +62,78 @@ hejmai/
 │   │   │   └── vigia.py         # Script principal
 │   │   └── scripts/             # Scripts de migração
 │   └── telegram_bot/            # (Legado - será removido)
+├── specs/                       # 📋 Especificação OpenAPI da API
+│   └── openapi/
+│       ├── openapi.yaml         # Arquivo mestre (índice)
+│       ├── paths/               # Definições de rotas
+│       └── schemas/             # Definições de objetos
 ├── main.py                      # Entry point (placeholder)
 ├── pyproject.toml               # Dependências e config do projeto
 ├── web.sh                       # Script para rodar Streamlit
 └── data/
     └── estoque.db               # Banco de dados SQLite
+```
+
+## 📋 Especificação OpenAPI (Fonte da Verdade)
+
+> **Importante para humanos e agentes de IA:**
+> A especificação completa da API está em `specs/openapi/`. Use estes arquivos como **fonte da verdade** para:
+> - Entender endpoints disponíveis
+> - Ver schemas de request/response
+> - Implementar novos endpoints
+> - Validar alterações na API
+
+### Estrutura da Especificação
+
+```
+specs/openapi/
+├── openapi.yaml              # Arquivo mestre (índice de todos os paths e schemas)
+├── paths/                    # Definições de rotas por domínio
+│   ├── status.yaml           # GET /
+│   ├── produtos.yaml         # Endpoints de produtos
+│   ├── compras.yaml          # Endpoints de compras
+│   ├── categorias.yaml       # Endpoints de categorias
+│   ├── relatorios.yaml       # Endpoints de relatórios
+│   └── ia.yaml               # Endpoints de IA
+└── schemas/                  # Definições de objetos reutilizáveis
+    ├── common.yaml           # Error, StatusResponse
+    ├── produto.yaml          # Produto, ProdutoUpdate, etc.
+    ├── compra.yaml           # CompraEntrada, CompraUpdate, etc.
+    ├── categoria.yaml        # Categoria, CategoriaCreate
+    ├── relatorios.yaml       # HistoricoPreco, PrevisaoGastos, etc.
+    └── unificacao.yaml       # UnificacaoProdutos, PerguntaIA, etc.
+```
+
+### Como Usar
+
+1. **Para consultar endpoints**: Abra `specs/openapi/openapi.yaml` e veja a seção `paths`
+2. **Para ver schemas de um endpoint**: Siga os `$ref` para `specs/openapi/schemas/`
+3. **Para adicionar novo endpoint**:
+   - Crie o path em `specs/openapi/paths/<dominio>.yaml`
+   - Adicione a referência em `openapi.yaml`
+   - Defina schemas em `specs/openapi/schemas/`
+4. **Para validar**: Use ferramentas como Swagger Editor ou Redocly
+
+### Exemplo de Referência
+
+```yaml
+# Em specs/openapi/openapi.yaml
+paths:
+  /compras/recentes:
+    $ref: "./paths/compras.yaml#/compras_recentes"
+
+# Em specs/openapi/paths/compras.yaml
+compras_recentes:
+  get:
+    summary: "Listar compras recentes"
+    responses:
+      "200":
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "../openapi.yaml#/components/schemas/CompraResumo"
 ```
 
 ## Comandos de Build e Execução
@@ -146,6 +213,8 @@ Açougue, Laticínios, Hortifruti, Mercearia, Higiene, Limpeza, Padaria, Bebidas
 
 ## Endpoints da API
 
+> 📋 **Lista completa em `specs/openapi/`**. Abaixo estão os principais:
+
 | Método | Endpoint | Descrição |
 |--------|----------|-----------|
 | `GET` | `/` | Status do servidor |
@@ -160,6 +229,8 @@ Açougue, Laticínios, Hortifruti, Mercearia, Higiene, Limpeza, Padaria, Bebidas
 | `GET` | `/relatorios/performance-budget` | Performance vs orçamento |
 | `PATCH` | `/produtos/consumir/{id}` | Registra consumo de produto |
 | `PATCH` | `/produtos/{id}` | Atualiza produto |
+| `PUT` | `/compras/{id}` | Edita compra |
+| `DELETE` | `/compras/{id}` | Exclui compra (lógica) |
 | `GET` | `/categorias` | Lista categorias |
 | `POST` | `/categoria` | Cria categoria |
 

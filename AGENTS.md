@@ -11,6 +11,43 @@
 
 ---
 
+## 📋 OpenAPI Specification (Source of Truth)
+
+> **For AI Agents and Humans:**
+> The complete API specification is in `specs/openapi/`. Use these files as the **source of truth** for:
+> - Understanding available endpoints
+> - Request/response schemas
+> - Implementing new endpoints
+> - Validating API changes
+
+### Structure
+```
+specs/openapi/
+├── openapi.yaml         # Master index file
+├── paths/               # Route definitions by domain
+│   ├── status.yaml
+│   ├── produtos.yaml
+│   ├── compras.yaml
+│   ├── categorias.yaml
+│   ├── relatorios.yaml
+│   └── ia.yaml
+└── schemas/             # Reusable object schemas
+    ├── common.yaml
+    ├── produto.yaml
+    ├── compra.yaml
+    ├── categoria.yaml
+    ├── relatorios.yaml
+    └── unificacao.yaml
+```
+
+### How to Use
+1. **Consult endpoints**: Open `specs/openapi/openapi.yaml` → `paths` section
+2. **View schemas**: Follow `$ref` links to `specs/openapi/schemas/`
+3. **Add new endpoint**: Create path file, add reference to `openapi.yaml`, define schemas
+4. **Validate**: Use Swagger Editor or similar tools
+
+---
+
 ## Build & Run Commands
 
 ### Development Server
@@ -156,7 +193,15 @@ hejmai/
 │       ├── crud.py          # Database operations
 │       ├── nlp.py           # Ollama integration
 │       ├── validator.py     # Data validation
-│       └── services.py
+│       ├── services.py
+│       ├── telegram_bot/    # Telegram bot
+│       ├── interface/       # Streamlit UI
+│       └── vigia_estoque/   # Stock monitoring
+├── specs/                   # 📋 OpenAPI Specification
+│   └── openapi/
+│       ├── openapi.yaml     # Master index
+│       ├── paths/           # Route definitions
+│       └── schemas/         # Object schemas
 ├── main.py                  # Entry point
 ├── pyproject.toml
 ├── uv.lock
