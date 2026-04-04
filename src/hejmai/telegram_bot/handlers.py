@@ -192,9 +192,9 @@ async def verificar_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def usar_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Registra consumo de um produto.
-    
+
     Uso com quantidade: /usar 2 leite
-    Uso sem quantidade: /usar leite (mostra itens similares)
+    Uso sem quantidade: /usar leite (mostra itens similares via API)
     """
     if len(context.args) < 1:
         await update.message.reply_text(
@@ -207,7 +207,7 @@ async def usar_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         # Tenta converter primeiro argumento para número
         primeiro_arg = context.args[0]
-        
+
         try:
             qtd = float(primeiro_arg)
             # Tem quantidade
@@ -220,14 +220,13 @@ async def usar_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
             tem_quantidade = False
 
         async with httpx.AsyncClient() as client:
-            r = await client.get(f"{API_URL}/produtos/todos")
-            produtos = r.json()
-
-            # Busca itens por similaridade
-            itens_similares = [
-                p for p in produtos 
-                if busca_nome.lower() in p["nome"].lower() and p["estoque_atual"] > 0
-            ]
+            # Usa o novo endpoint de busca híbrida (ilike + fuzzy)
+            r = await client.get(
+                f"{API_URL}/produtos/buscar",
+                params={"termo": busca_nome, "com_estoque": True}
+            )
+            r.raise_for_status()
+            itens_similares = r.json()
 
             if not itens_similares:
                 await update.message.reply_text(
@@ -239,32 +238,25 @@ async def usar_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Se não tem quantidade, mostra itens similares
             if not tem_quantidade:
                 texto = f"📦 *Itens encontrados para '{busca_nome}':*\n\n"
-                
+
                 for i, item in enumerate(itens_similares, 1):
                     texto += f"*{i}.* {item['nome']}\n"
                     texto += f"   Estoque: {item['estoque_atual']} {item['unidade_medida']}\n"
                     if item.get('ultima_validade'):
                         texto += f"   Validade: {item['ultima_validade']}\n"
                     texto += "\n"
-                
+
                 texto += (
                     f"💡 Para consumir, use:\n"
                     f"`/usar <quantidade> <nome exato>`\n"
                     f"Ex: `/usar 1 {itens_similares[0]['nome']}`"
                 )
-                
+
                 await update.message.reply_text(texto, parse_mode="Markdown")
                 return
 
-            # Tem quantidade - procura item exato
-            if len(itens_similares) == 1:
-                produto = itens_similares[0]
-            else:
-                # Múltiplos encontrados - tenta match exato
-                produto = next(
-                    (p for p in itens_similares if busca_nome.lower() == p["nome"].lower()),
-                    itens_similares[0]  # Se não achar exato, pega o primeiro
-                )
+            # Tem quantidade - usa o primeiro resultado (mais relevante)
+            produto = itens_similares[0]
 
             payload = {"quantidade": qtd}
             res = await client.patch(

@@ -352,6 +352,35 @@ async def gerar_dados_lista(db: Session = Depends(database.get_db)):
     return itens_em_falta
 
 
+@app.get("/produtos/buscar")
+async def buscar_produtos(
+    termo: str = Query(..., min_length=1, description="Termo de busca por nome"),
+    com_estoque: bool = Query(default=True, description="Filtrar apenas produtos com estoque"),
+    db: Session = Depends(database.get_db)
+):
+    """
+    Busca produtos por nome usando busca híbrida (ilike + fuzzy matching).
+    
+    Útil para encontrar produtos mesmo com erros de digitação ou variações
+    (ex: 'pão' encontra 'Pães', 'arros' encontra 'Arroz').
+    """
+    from hejmai import crud
+    
+    produtos = crud.buscar_produtos_similares(db, termo, com_estoque=com_estoque)
+    
+    return [
+        {
+            "id": p.id,
+            "nome": p.nome,
+            "categoria": p.categoria,
+            "estoque_atual": p.estoque_atual,
+            "unidade_medida": p.unidade_medida,
+            "ultima_validade": p.ultima_validade,
+        }
+        for p in produtos
+    ]
+
+
 @app.patch("/produtos/consumir/{produto_id}")
 async def consumir_produto(
     produto_id: int, quantidade: float, db: Session = Depends(database.get_db)
