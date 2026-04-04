@@ -29,6 +29,7 @@ from telegram.ext import (
 )
 
 from hejmai.database import SessionLocal
+from hejmai import crud
 from hejmai.vigia_estoque.vigia import executar_vigia
 from hejmai.vigia_estoque.analise_consumo import (
     gerar_relatorio_texto,

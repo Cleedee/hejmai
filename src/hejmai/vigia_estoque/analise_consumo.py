@@ -5,14 +5,15 @@ Calcula:
 - Burn rate (ritmo de consumo) por produto
 - Dias restantes até acabar
 - Produtos próximos do vencimento
+
+Este módulo usa funções de crud.py para acesso ao banco de dados.
 """
 
 import datetime
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import func, text
 
-from hejmai import models
+from hejmai import crud
 
 
 # =============================================================================
@@ -30,7 +31,7 @@ DIAS_ANALISE_CONSUMO = 30    # Período de análise do burn rate (dias)
 
 class ProdutoAlerta:
     """Representa um produto com alerta."""
-    
+
     def __init__(
         self,
         nome: str,
@@ -48,7 +49,7 @@ class ProdutoAlerta:
         self.dias_restantes = dias_restantes
         self.motivo = motivo
         self.data_validade = data_validade
-    
+
     def __repr__(self):
         return f"ProdutoAlerta({self.nome}, {self.dias_restantes} dias, {self.motivo})"
 
@@ -60,57 +61,49 @@ class ProdutoAlerta:
 def calcular_burn_rate(db: Session, produto_id: int, dias: int = DIAS_ANALISE_CONSUMO) -> float:
     """
     Calcula o burn rate (ritmo de consumo) de um produto.
-    
+
     Args:
         db: Sessão do banco de dados
         produto_id: ID do produto
         dias: Período de análise em dias
-    
+
     Returns:
         Burn rate em unidades/dia. 0 se não houver consumo.
     """
-    data_limite = datetime.date.today() - datetime.timedelta(days=dias)
+    # Usa crud para buscar consumo
+    total_consumido = crud.get_consumo_periodo(db, produto_id, dias)
     
-    # Busca movimentações de consumo no período
-    resultado = db.query(
-        func.sum(func.abs(models.Movimentacao.quantidade))
-    ).filter(
-        models.Movimentacao.produto_id == produto_id,
-        models.Movimentacao.tipo == "CONSUMO",
-        models.Movimentacao.data_movimento >= data_limite,
-    ).scalar()
-    
-    if resultado is None or resultado == 0:
+    if total_consumido == 0:
         return 0.0
     
     # Burn rate = total consumido / dias
-    return resultado / dias
+    return total_consumido / dias
 
 
 def calcular_dias_restantes(estoque_atual: float, burn_rate: float) -> int:
     """
     Calcula quantos dias o produto vai durar com base no burn rate.
-    
+
     Args:
         estoque_atual: Quantidade atual em estoque
         burn_rate: Ritmo de consumo (unidades/dia)
-    
+
     Returns:
         Dias restantes. 999 se burn_rate for 0 (produto não está sendo consumido).
     """
     if burn_rate <= 0:
         return 999  # Produto não está sendo consumido
-    
+
     return int(estoque_atual / burn_rate)
 
 
 def analisar_estoque(db: Session) -> Dict[str, Any]:
     """
     Analisa todo o estoque e identifica produtos com alerta.
-    
+
     Args:
         db: Sessão do banco de dados
-    
+
     Returns:
         Dict com:
         - 'produtos_acabando': Lista de ProdutoAlerta com estoque baixo
@@ -119,23 +112,18 @@ def analisar_estoque(db: Session) -> Dict[str, Any]:
         - 'data_analise': Data/hora da análise
     """
     hoje = datetime.date.today()
-    data_limite_vencimento = hoje + datetime.timedelta(days=DIAS_PARA_VENCER_ALERTA)
-    
+
     produtos_acabando = []
     produtos_vencendo = []
-    
-    # Busca todos os produtos com estoque positivo
-    produtos = (
-        db.query(models.Produto)
-        .filter(models.Produto.estoque_atual > 0)
-        .all()
-    )
-    
+
+    # Busca todos os produtos com estoque positivo via crud
+    produtos = crud.get_produtos_com_estoque(db)
+
     for produto in produtos:
         # Calcula burn rate
         burn_rate = calcular_burn_rate(db, produto.id)
         dias_restantes = calcular_dias_restantes(produto.estoque_atual, burn_rate)
-        
+
         # Verifica se está acabando
         if dias_restantes <= DIAS_PARA_ACABAR_ALERTA and burn_rate > 0:
             produtos_acabando.append(ProdutoAlerta(
@@ -146,11 +134,11 @@ def analisar_estoque(db: Session) -> Dict[str, Any]:
                 dias_restantes=dias_restantes,
                 motivo="acabando",
             ))
-        
+
         # Verifica se está vencendo
         if produto.ultima_validade:
             dias_para_vencer = (produto.ultima_validade - hoje).days
-            
+
             if 0 <= dias_para_vencer <= DIAS_PARA_VENCER_ALERTA:
                 produtos_vencendo.append(ProdutoAlerta(
                     nome=produto.nome,
@@ -161,11 +149,11 @@ def analisar_estoque(db: Session) -> Dict[str, Any]:
                     motivo="vencendo",
                     data_validade=produto.ultima_validade,
                 ))
-    
+
     # Ordena por urgência (menos dias primeiro)
     produtos_acabando.sort(key=lambda p: p.dias_restantes)
     produtos_vencendo.sort(key=lambda p: p.dias_restantes)
-    
+
     return {
         "produtos_acabando": produtos_acabando,
         "produtos_vencendo": produtos_vencendo,
