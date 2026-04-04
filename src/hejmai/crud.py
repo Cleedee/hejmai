@@ -6,6 +6,7 @@ Todos os outros módulos (handlers, vigia, services) devem usar estas funções.
 """
 
 import datetime
+from difflib import get_close_matches
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional, Dict, Any
@@ -80,22 +81,69 @@ def buscar_produtos_similares(
 ) -> List[models.Produto]:
     """
     Busca produtos por similaridade de nome.
-    
+
+    Usa abordagem híbrida:
+    1. Busca match exato por substring (ilike)
+    2. Busca por similaridade fuzzy (difflib)
+    3. Combina resultados, removendo duplicatas
+
+    Isso resolve casos como "pão" → "Pães" E "Pão Francês".
+
     Args:
         termo: Termo de busca (case insensitive)
         com_estoque: Se True, retorna apenas produtos com estoque > 0
-    
+
     Returns:
-        Lista de produtos que contêm o termo no nome
+        Lista de produtos similares, priorizando matches exatos
     """
+    # 1. Match exato por substring (prioridade)
     query = db.query(models.Produto).filter(
         models.Produto.nome.ilike(f"%{termo}%")
     )
-    
+
     if com_estoque:
         query = query.filter(models.Produto.estoque_atual > 0)
-    
-    return query.all()
+
+    resultados_ilike = query.all()
+    ids_encontrados = {p.id for p in resultados_ilike}
+
+    # 2. Fuzzy matching para encontrar variações (ex: "pão" → "Pães")
+    if com_estoque:
+        todos_produtos = get_produtos_com_estoque(db)
+    else:
+        todos_produtos = get_todos_produtos(db)
+
+    if not todos_produtos:
+        return resultados_ilike
+
+    # Filtra produtos já encontrados pelo ilike
+    produtos_para_fuzzy = [p for p in todos_produtos if p.id not in ids_encontrados]
+
+    if produtos_para_fuzzy:
+        # Usa a primeira palavra do nome para fuzzy matching
+        # Isso ajuda com "arros" → "Arroz Integral" (compara "arros" com "Arroz")
+        nomes_para_busca = [p.nome.split()[0].lower() for p in produtos_para_fuzzy]
+        termo_normalizado = termo.lower().split()[0]
+
+        matches = get_close_matches(
+            termo_normalizado,
+            nomes_para_busca,
+            n=10,
+            cutoff=0.5,
+        )
+
+        # Mapeia de volta para produtos (pode ter duplicatas na primeira palavra)
+        seen_ids = set()
+        resultados_fuzzy = []
+        for i, nome_lower in enumerate(nomes_para_busca):
+            if nome_lower in matches and produtos_para_fuzzy[i].id not in seen_ids:
+                resultados_fuzzy.append(produtos_para_fuzzy[i])
+                seen_ids.add(produtos_para_fuzzy[i].id)
+    else:
+        resultados_fuzzy = []
+
+    # 3. Combina resultados (exatos primeiro, depois fuzzy)
+    return resultados_ilike + resultados_fuzzy
 
 
 def get_produtos_alertas(db: Session) -> Dict[str, List[models.Produto]]:
