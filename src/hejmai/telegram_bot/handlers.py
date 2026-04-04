@@ -189,26 +189,81 @@ async def verificar_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def usar_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Registra consumo de um produto."""
-    if len(context.args) < 2:
-        await update.message.reply_text("💡 Use: /usar [quantidade] [nome do item]")
+    """
+    Registra consumo de um produto.
+    
+    Uso com quantidade: /usar 2 leite
+    Uso sem quantidade: /usar leite (mostra itens similares)
+    """
+    if len(context.args) < 1:
+        await update.message.reply_text(
+            "💡 Use:\n"
+            "• /usar [quantidade] [nome] → Ex: /usar 2 leite\n"
+            "• /usar [nome] → Busca itens similares"
+        )
         return
 
     try:
-        qtd = float(context.args[0])
-        busca_nome = " ".join(context.args[1:])
+        # Tenta converter primeiro argumento para número
+        primeiro_arg = context.args[0]
+        
+        try:
+            qtd = float(primeiro_arg)
+            # Tem quantidade
+            busca_nome = " ".join(context.args[1:])
+            tem_quantidade = True
+        except ValueError:
+            # Não tem quantidade, primeiro arg é parte do nome
+            busca_nome = " ".join(context.args)
+            qtd = None
+            tem_quantidade = False
 
         async with httpx.AsyncClient() as client:
             r = await client.get(f"{API_URL}/produtos/todos")
             produtos = r.json()
 
-            produto = next(
-                (p for p in produtos if busca_nome.lower() in p["nome"].lower()), None
-            )
+            # Busca itens por similaridade
+            itens_similares = [
+                p for p in produtos 
+                if busca_nome.lower() in p["nome"].lower() and p["estoque_atual"] > 0
+            ]
 
-            if not produto:
-                await update.message.reply_text(f"❓ Não encontrei '{busca_nome}' no estoque.")
+            if not itens_similares:
+                await update.message.reply_text(
+                    f"❓ Não encontrei '{busca_nome}' no estoque.\n\n"
+                    f"💡 Verifique o nome ou adicione ao estoque primeiro."
+                )
                 return
+
+            # Se não tem quantidade, mostra itens similares
+            if not tem_quantidade:
+                texto = f"📦 *Itens encontrados para '{busca_nome}':*\n\n"
+                
+                for i, item in enumerate(itens_similares, 1):
+                    texto += f"*{i}.* {item['nome']}\n"
+                    texto += f"   Estoque: {item['estoque_atual']} {item['unidade_medida']}\n"
+                    if item.get('ultima_validade'):
+                        texto += f"   Validade: {item['ultima_validade']}\n"
+                    texto += "\n"
+                
+                texto += (
+                    f"💡 Para consumir, use:\n"
+                    f"`/usar <quantidade> <nome exato>`\n"
+                    f"Ex: `/usar 1 {itens_similares[0]['nome']}`"
+                )
+                
+                await update.message.reply_text(texto, parse_mode="Markdown")
+                return
+
+            # Tem quantidade - procura item exato
+            if len(itens_similares) == 1:
+                produto = itens_similares[0]
+            else:
+                # Múltiplos encontrados - tenta match exato
+                produto = next(
+                    (p for p in itens_similares if busca_nome.lower() == p["nome"].lower()),
+                    itens_similares[0]  # Se não achar exato, pega o primeiro
+                )
 
             payload = {"quantidade": qtd}
             res = await client.patch(
@@ -219,14 +274,15 @@ async def usar_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 dados = res.json()
                 texto = f"✅ **Baixa Registrada!**\n"
                 texto += f"Item: {produto['nome']}\n"
+                texto += f"Quantidade: {qtd} {produto['unidade_medida']}\n"
                 texto += f"Restante: {dados['estoque_restante']} {produto['unidade_medida']}"
                 await update.message.reply_text(texto, parse_mode="Markdown")
             else:
                 erro = res.json().get("detail", "Erro desconhecido")
                 await update.message.reply_text(f"❌ {erro}")
 
-    except ValueError:
-        await update.message.reply_text("❌ A quantidade deve ser um número (ex: /usar 0.5 leite).")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Erro ao registrar consumo: {e}")
 
 
 async def sugerir_jantar(update: Update, context: ContextTypes.DEFAULT_TYPE):
