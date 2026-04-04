@@ -74,7 +74,10 @@ paths:
   /compras/registrar-lote:
     $ref: "./paths/compras.yaml#/compras_registrar_lote"
   /compras/{compra_id}:
-    $ref: "./paths/compras.yaml#/compras_excluir"
+    delete:
+      $ref: "./paths/compras.yaml#/compras_excluir/delete"
+    put:
+      $ref: "./paths/compras.yaml#/compras_editar/put"
   /compras/{compra_id}/restaurar:
     $ref: "./paths/compras.yaml#/compras_restaurar"
   /compras/excluidas:
@@ -127,6 +130,8 @@ components:
     # Compras
     CompraEntrada:
       $ref: "./schemas/compra.yaml#/CompraEntrada"
+    CompraUpdate:
+      $ref: "./schemas/compra.yaml#/CompraUpdate"
     ItemEntrada:
       $ref: "./schemas/compra.yaml#/ItemEntrada"
     CompraResumo:

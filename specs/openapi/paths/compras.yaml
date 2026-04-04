@@ -155,18 +155,19 @@ compras_recentes:
 
 compras_editar:
   put:
-    summary: "Editar compras"
-    description: "Editar compras"
-    operationId: "editarCompras"
+    summary: "Editar compra"
+    description: "Edita o local de compra e/ou a data de uma compra existente. Não altera os itens da compra."
+    operationId: "editarCompra"
     tags:
       - "compras"
     parameters:
       - name: "compra_id"
         in: "path"
         required: true
-        description: "ID da compra"
+        description: "ID da compra a ser editada"
         schema:
           type: integer
+          example: 5
     requestBody:
       required: true
       content:
@@ -176,7 +177,34 @@ compras_editar:
     responses:
       "200":
         description: "Compra atualizada com sucesso"
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: "sucesso"
+                mensagem:
+                  type: string
+                  example: "Compra 5 atualizada com sucesso"
+                compra:
+                  $ref: "../openapi.yaml#/components/schemas/CompraResumo"
+      "400":
+        description: "Nenhum dado fornecido para atualização"
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"
       "404":
         description: "Compra não encontrada"
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"
       "422":
         description: "Erro na validação de dados enviados"
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"
