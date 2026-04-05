@@ -278,6 +278,65 @@ async def usar_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Erro ao registrar consumo: {e}")
 
 
+async def registrar_desperdicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Registra perda/desperdício de um produto.
+    
+    Uso: /desperdicio 2 leite (perdeu 2 unidades de leite)
+    """
+    if len(context.args) < 2:
+        await update.message.reply_text(
+            "💡 Use: /desperdicio [quantidade] [nome do item]\n"
+            "Ex: /desperdicio 2 leite"
+        )
+        return
+
+    try:
+        qtd = float(context.args[0])
+        busca_nome = " ".join(context.args[1:])
+
+        async with httpx.AsyncClient() as client:
+            # Busca produto por similaridade
+            r = await client.get(
+                f"{API_URL}/produtos/buscar",
+                params={"termo": busca_nome, "com_estoque": True}
+            )
+            r.raise_for_status()
+            itens_similares = r.json()
+
+            if not itens_similares:
+                await update.message.reply_text(
+                    f"❓ Não encontrei '{busca_nome}' no estoque.\n\n"
+                    f"💡 Verifique o nome ou adicione ao estoque primeiro."
+                )
+                return
+
+            # Usa o primeiro resultado (mais relevante)
+            produto = itens_similares[0]
+
+            # Registra perda
+            payload = {"quantidade": qtd}
+            res = await client.patch(
+                f"{API_URL}/produtos/perda/{produto['id']}", params=payload
+            )
+
+            if res.status_code == 200:
+                dados = res.json()
+                texto = f"🗑️ **Perda Registrada!**\n"
+                texto += f"Item: {produto['nome']}\n"
+                texto += f"Quantidade perdida: {qtd} {produto['unidade_medida']}\n"
+                texto += f"Restante: {dados['estoque_restante']} {produto['unidade_medida']}"
+                await update.message.reply_text(texto, parse_mode="Markdown")
+            else:
+                erro = res.json().get("detail", "Erro desconhecido")
+                await update.message.reply_text(f"❌ {erro}")
+
+    except ValueError:
+        await update.message.reply_text("❌ Quantidade deve ser um número (ex: /desperdicio 0.5 leite).")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Erro ao registrar perda: {e}")
+
+
 async def sugerir_jantar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sugere receita com base em itens vencendo."""
     await update.message.reply_text("👨‍🍳 Deixe-me ver o que temos na despensa...")
@@ -505,6 +564,7 @@ Posso te ajudar a gerenciar seu estoque doméstico.
 • /ultimas_compras - Ver últimas compras
 • /backup - 📦 Baixar banco + configurações
 • /usar - Registrar consumo (ex: /usar 2 leite)
+• /desperdicio - Registrar perda (ex: /desperdicio 1 leite)
 • /sugerir_jantar - Sugere receita
 • /lista_compras - Gera lista de compras
 • /pergunta - Pergunte à IA
@@ -570,6 +630,7 @@ def criar_bot(app: Application) -> None:
     app.add_handler(CommandHandler("vigia", comando_vigia))
     app.add_handler(CommandHandler("vigia_config", comando_vigia_config))
     app.add_handler(CommandHandler("usar", usar_item))
+    app.add_handler(CommandHandler("desperdicio", registrar_desperdicio))
     app.add_handler(CommandHandler("sugerir_jantar", sugerir_jantar))
     app.add_handler(CommandHandler("lista_compras", gerar_lista_orcada))
     app.add_handler(CommandHandler("ultimas_compras", comando_ultimas_compras))

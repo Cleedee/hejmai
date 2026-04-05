@@ -415,6 +415,45 @@ async def consumir_produto(
     }
 
 
+@app.patch("/produtos/perda/{produto_id}")
+async def registrar_perda(
+    produto_id: int, quantidade: float, db: Session = Depends(database.get_db)
+):
+    """
+    Registra perda/desperdício de um produto.
+    
+    Diferente do consumo, cria movimentação do tipo 'PERDA' para auditoria.
+    """
+    produto = db.query(models.Produto).filter(models.Produto.id == produto_id).first()
+
+    if not produto:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+
+    if produto.estoque_atual < quantidade:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Estoque insuficiente. Disponível: {produto.estoque_atual}",
+        )
+
+    produto.estoque_atual -= quantidade
+
+    nova_mov = models.Movimentacao(
+        produto_id=produto_id,
+        quantidade=-quantidade,
+        tipo="PERDA"
+    )
+
+    db.add(nova_mov)
+
+    db.commit()
+    db.refresh(produto)
+
+    return {
+        "mensagem": f"{quantidade} {produto.unidade_medida} de {produto.nome} registrado como perda.",
+        "estoque_restante": produto.estoque_atual,
+    }
+
+
 @app.patch("/produtos/{produto_id}")
 async def editar_produto(
     produto_id: int,
