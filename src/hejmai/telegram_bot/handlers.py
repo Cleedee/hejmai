@@ -46,11 +46,70 @@ API_URL = os.getenv("API_URL", "http://api:8081")
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID_PESSOAL = os.getenv("TELEGRAM_CHAT_ID")
 
+# Usuários permitidos (separados por vírgula)
+ALLOWED_USER_IDS = os.getenv("TELEGRAM_ALLOWED_USERS", CHAT_ID_PESSOAL or "")
+ALLOWED_GROUP_IDS = os.getenv("TELEGRAM_ALLOWED_GROUPS", "")
+
+
+def is_authorized(update: Update) -> bool:
+    """
+    Verifica se o usuário ou grupo está autorizado a usar o bot.
+
+    Regras:
+    1. Se ALLOWED_USER_IDS estiver vazio, permite apenas CHAT_ID_PESSOAL
+    2. Verifica se o usuário está na lista de permitidos
+    3. Verifica se o chat é um grupo permitido
+    """
+    if not update.effective_user:
+        return False
+
+    user_id = str(update.effective_user.id)
+    chat_id = str(update.effective_chat.id) if update.effective_chat else ""
+
+    # Lista de usuários permitidos
+    users_allowed = {u.strip() for u in ALLOWED_USER_IDS.split(",") if u.strip()}
+    # Lista de grupos permitidos
+    groups_allowed = {g.strip() for g in ALLOWED_GROUP_IDS.split(",") if g.strip()}
+
+    # Se não há configuração, permite apenas o dono
+    if not users_allowed and not groups_allowed:
+        return user_id == str(CHAT_ID_PESSOAL)
+
+    # Verifica se usuário está autorizado
+    if user_id in users_allowed:
+        return True
+
+    # Verifica se é um grupo autorizado (chat_id negativo para grupos/supergrupos)
+    if chat_id.startswith("-") and chat_id in groups_allowed:
+        return True
+
+    return False
+
+
+async def check_authorization(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Middleware de autorização. Retorna False e envia mensagem se não autorizado."""
+    if not is_authorized(update):
+        await update.message.reply_text(
+            "🔒 Acesso negado. Você não tem permissão para usar este bot."
+        )
+        return False
+    return True
+
+
+def authorized_handler(func):
+    """Decorator para adicionar verificação de autorização automaticamente."""
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not await check_authorization(update, context):
+            return
+        return await func(update, context)
+    return wrapper
+
 
 # =============================================================================
 # Comandos do Vigia do Estoque (Novo)
 # =============================================================================
 
+@authorized_handler
 async def comando_vigia(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Executa o vigia do estoque manualmente.
@@ -73,6 +132,7 @@ async def comando_vigia(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         db.close()
 
 
+@authorized_handler
 async def comando_vigia_config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Mostra configuração atual do vigia.
@@ -105,6 +165,7 @@ async def comando_vigia_config(update: Update, context: ContextTypes.DEFAULT_TYP
 # Comandos do Bot Original
 # =============================================================================
 
+@authorized_handler
 async def comando_estoque(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Lista todo o estoque por categoria."""
     try:
@@ -160,6 +221,7 @@ async def comando_estoque(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Erro ao ler estoque: {e}")
 
 
+@authorized_handler
 async def verificar_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Verifica alertas de estoque (vencimento e estoque baixo)."""
     try:
@@ -189,6 +251,7 @@ async def verificar_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Erro ao buscar status: {e}")
 
 
+@authorized_handler
 async def usar_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Registra consumo de um produto.
@@ -278,6 +341,7 @@ async def usar_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Erro ao registrar consumo: {e}")
 
 
+@authorized_handler
 async def registrar_desperdicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Registra perda/desperdício de um produto.
@@ -337,6 +401,7 @@ async def registrar_desperdicio(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text(f"❌ Erro ao registrar perda: {e}")
 
 
+@authorized_handler
 async def sugerir_jantar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sugere receita com base em itens vencendo."""
     await update.message.reply_text("👨‍🍳 Deixe-me ver o que temos na despensa...")
@@ -367,6 +432,7 @@ async def sugerir_jantar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ O Chef teve um problema na cozinha: {e}")
 
 
+@authorized_handler
 async def gerar_lista_orcada(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gera lista de compras agrupada por estabelecimento mais barato."""
     try:
@@ -401,6 +467,7 @@ async def gerar_lista_orcada(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"❌ Erro ao gerar lista: {e}")
 
 
+@authorized_handler
 async def comando_ultimas_compras(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Lista as últimas compras realizadas."""
     try:
@@ -434,6 +501,7 @@ async def comando_ultimas_compras(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text(f"❌ Erro ao buscar compras: {e}")
 
 
+@authorized_handler
 async def comando_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Gera e envia backup do banco de dados e configurações.
@@ -504,6 +572,7 @@ async def comando_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Erro ao gerar backup: {e}")
 
 
+@authorized_handler
 async def comando_pergunta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Faz pergunta em linguagem natural para a IA."""
     pergunta = " ".join(context.args)
@@ -531,6 +600,7 @@ async def comando_pergunta(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Erro ao processar a pergunta pela IA.")
 
 
+@authorized_handler
 async def registrar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Processa texto livre para registrar compra via NLP."""
     texto = update.message.text
