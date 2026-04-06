@@ -732,7 +732,7 @@ def criar_bot(app: Application) -> None:
         import datetime
         times = [
             datetime.time(hour=8, minute=0),
-            datetime.time(hour=13, minute=0),
+            datetime.time(hour=15, minute=0),
             datetime.time(hour=18, minute=0),
         ]
         for t in times:
