@@ -368,27 +368,31 @@ async def sugerir_jantar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def gerar_lista_orcada(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gera lista de compras baseada em itens com estoque baixo."""
+    """Gera lista de compras agrupada por estabelecimento mais barato."""
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{API_URL}/produtos/lista-compras-detalhada")
-            itens = response.json()
+            dados = response.json()
 
-        if not itens:
+        if not dados.get("por_estabelecimento"):
             await update.message.reply_text("✅ O estoque está em dia! Nada para comprar.")
             return
 
         hoje = datetime.date.today().strftime("%d/%m")
         texto = f"📝 **Orçamento de Compras ({hoje})**\n"
-        texto += "--- Copie abaixo para o Keep ---\n\n"
+        texto += "--- Agrupado por melhor preço ---\n\n"
 
-        total_estimado = 0
-        for item in itens:
-            preco = item["preco_referencia"]
-            total_estimado += preco
-            texto += f"☐ {item['nome']} - (Ref: R$ {preco:.2f})\n"
+        total_geral = 0
 
-        texto += f"\n💰 **Estimativa Total: R$ {total_estimado:.2f}**"
+        for estabelecimento, info in dados["por_estabelecimento"].items():
+            texto += f"🏪 *{estabelecimento}*\n"
+            for produto in info["produtos"]:
+                texto += f"  ☐ {produto['nome']} - R$ {produto['preco_referencia']:.2f}\n"
+            texto += f"  💰 Subtotal: R$ {info['total_estimado']:.2f}\n\n"
+            total_geral += info["total_estimado"]
+
+        texto += f"💵 **Estimativa Total: R$ {dados['total_estimado']:.2f}**"
+        texto += f"\n📦 {dados['quantidade_produtos']} produtos"
         texto += "\n\n*Dica: Cole no Keep e ative as Checkboxes!*"
 
         await update.message.reply_text(texto, parse_mode="Markdown")

@@ -201,32 +201,116 @@ async def encontrar_produtos_similares(
 
 @app.get("/produtos/lista-compras-detalhada")
 async def gerar_lista_detalhada(db: Session = Depends(database.get_db)):
+    """
+    Gera lista de compras detalhada agrupada por estabelecimento mais barato.
+
+    Para cada produto com estoque baixo:
+    1. Analisa histórico de preços por estabelecimento
+    2. Calcula preço médio por estabelecimento
+    3. Determina o estabelecimento mais barato
+    4. Agrupa por estabelecimento (se diferença < 5%, considera irrelevante)
+    """
     # 1. Busca produtos com estoque baixo
     itens = db.query(models.Produto).filter(models.Produto.estoque_atual < 1.0).all()
 
-    lista_final = []
+    if not itens:
+        return {"por_estabelecimento": {}, "total_estimado": 0.0}
+
+    produtos_analise = []
+
     for p in itens:
-        # Busca o último preço pago para servir de âncora
-        ultimo_item = (
-            db.query(models.ItemCompra)
-            .filter(models.ItemCompra.produto_id == p.id)
-            .order_by(models.ItemCompra.id.desc())
-            .first()
+        # Busca histórico completo de preços deste produto
+        historico = (
+            db.query(models.ItemCompra, models.Compra)
+            .join(models.Compra)
+            .filter(
+                models.ItemCompra.produto_id == p.id,
+                models.Compra.excluida == 0,
+            )
+            .all()
         )
 
-        preco_ref = ultimo_item.preco_unitario if ultimo_item else 0.0
-
-        lista_final.append(
-            {
+        if not historico:
+            # Sem histórico - usa preço zero e sem estabelecimento definido
+            produtos_analise.append({
                 "nome": p.nome,
                 "categoria": p.categoria,
-                "preco_referencia": preco_ref,
+                "preco_referencia": 0.0,
                 "estoque": p.estoque_atual,
                 "unidade": p.unidade_medida,
-            }
-        )
+                "melhor_estabelecimento": "Sem histórico",
+                "preco_medio": 0.0,
+            })
+            continue
 
-    return lista_final
+        # Calcula preço médio por estabelecimento
+        precos_por_local = {}
+        for item_compra, compra in historico:
+            local = compra.local_compra
+            if local not in precos_por_local:
+                precos_por_local[local] = []
+            precos_por_local[local].append(item_compra.preco_unitario)
+
+        # Calcula médias
+        medias = {
+            local: sum(precos) / len(precos)
+            for local, precos in precos_por_local.items()
+        }
+
+        # Encontra o mais barato
+        if medias:
+            melhor_local = min(medias, key=medias.get)
+            preco_medio = medias[melhor_local]
+            menor_preco = min(medias.values())
+            maior_preco = max(medias.values())
+
+            # Verifica se diferença é relevante (> 5%)
+            if maior_preco > 0:
+                diff_percentual = ((maior_preco - menor_preco) / menor_preco) * 100
+            else:
+                diff_percentual = 0
+
+            # Se diferença irrelevante, agrupa no local com mais produtos
+            if diff_percentual < 5:
+                # Conta compras por local
+                contagem = {local: len(precos) for local, precos in precos_por_local.items()}
+                melhor_local = max(contagem, key=contagem.get)
+                preco_medio = sum(medias.values()) / len(medias)
+
+            produtos_analise.append({
+                "nome": p.nome,
+                "categoria": p.categoria,
+                "preco_referencia": round(preco_medio, 2),
+                "estoque": p.estoque_atual,
+                "unidade": p.unidade_medida,
+                "melhor_estabelecimento": melhor_local,
+                "preco_medio": round(preco_medio, 2),
+                "diferenca_percentual": round(diff_percentual, 1) if diff_percentual >= 5 else 0,
+            })
+
+    # Agrupa por estabelecimento
+    por_estabelecimento = {}
+    for produto in produtos_analise:
+        local = produto["melhor_estabelecimento"]
+        if local not in por_estabelecimento:
+            por_estabelecimento[local] = {
+                "produtos": [],
+                "total_estimado": 0.0,
+            }
+        por_estabelecimento[local]["produtos"].append(produto)
+        por_estabelecimento[local]["total_estimado"] += produto["preco_referencia"]
+
+    # Arredonda totais
+    for local_data in por_estabelecimento.values():
+        local_data["total_estimado"] = round(local_data["total_estimado"], 2)
+
+    total_geral = sum(d["total_estimado"] for d in por_estabelecimento.values())
+
+    return {
+        "por_estabelecimento": por_estabelecimento,
+        "total_estimado": round(total_geral, 2),
+        "quantidade_produtos": len(produtos_analise),
+    }
 
 
 @app.get("/relatorios/historico-precos/{produto_id}")
