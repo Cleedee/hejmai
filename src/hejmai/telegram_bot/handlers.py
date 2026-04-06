@@ -650,34 +650,47 @@ Envie texto descrevendo compras que eu processo automaticamente!
 
 
 # =============================================================================
-# Job Agendado (Relatório Diário)
+# Job Agendado (Relatório Vigia)
 # =============================================================================
 
-async def job_relatorio_diario(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Job agendado para enviar relatório diário às 08:00."""
-    print("🔔 Executando job de relatório diário...")
+def get_authorized_chats():
+    """Retorna lista de IDs de chats autorizados (usuários e grupos)."""
+    chats = set()
+    if ALLOWED_USER_IDS:
+        chats.update([u.strip() for u in ALLOWED_USER_IDS.split(",") if u.strip()])
+    else:
+        if CHAT_ID_PESSOAL:
+            chats.add(str(CHAT_ID_PESSOAL))
+            
+    if ALLOWED_GROUP_IDS:
+        chats.update([g.strip() for g in ALLOWED_GROUP_IDS.split(",") if g.strip()])
+    return chats
 
+
+async def job_vigia(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Job agendado para enviar relatório do Vigia do Estoque."""
+    print("🔔 Executando job do Vigia do Estoque...")
     db = SessionLocal()
-
     try:
         analise = analisar_estoque(db)
+        relatorio = gerar_relatorio_texto(analise)
+        
+        # Envia para todos os chats autorizados
+        chats = get_authorized_chats()
+        if not chats:
+            print("❌ Nenhum chat autorizado configurado para envio automático.")
+            return
 
-        if tem_alertas_urgentes(analise):
-            relatorio = gerar_relatorio_texto(analise)
-            chat_id = context.chat_data.get("chat_id") or CHAT_ID_PESSOAL
-
-            if chat_id and TOKEN:
+        for chat_id in chats:
+            try:
                 await context.bot.send_message(
                     chat_id=chat_id,
                     text=relatorio,
                     parse_mode="Markdown",
                 )
-                print("✅ Relatório enviado")
-            else:
-                print("❌ Chat ID ou Token não configurados")
-        else:
-            print("✅ Sem alertas urgentes. Relatório não enviado.")
-
+                print(f"✅ Relatório enviado para {chat_id}")
+            except Exception as e:
+                print(f"❌ Erro ao enviar para {chat_id}: {e}")
     finally:
         db.close()
 
@@ -714,14 +727,20 @@ def criar_bot(app: Application) -> None:
     # Handler de mensagens de texto (NLP)
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), registrar_compra))
 
-    # Job agendado (diário às 08:00)
+    # Jobs agendados do Vigia (08:00, 13:00, 18:00)
     if app.job_queue:
         import datetime
-        app.job_queue.run_daily(
-            job_relatorio_diario,
-            time=datetime.time(hour=8, minute=0),
-            name="relatorio_diario",
-        )
-        print("📅 Job diário agendado para 08:00")
+        times = [
+            datetime.time(hour=8, minute=0),
+            datetime.time(hour=13, minute=0),
+            datetime.time(hour=18, minute=0),
+        ]
+        for t in times:
+            app.job_queue.run_daily(
+                job_vigia,
+                time=t,
+                name=f"vigia_{t.hour}h",
+            )
+        print("📅 Jobs do Vigia agendados para 08:00, 13:00 e 18:00")
 
     print("✅ Bot do Telegram configurado")
