@@ -10,6 +10,7 @@ services:
       - ./data:/app/data
       - ./src/hejmai:/app/src/hejmai:ro
     environment:
+      - TZ=America/Sao_Paulo
       - DATABASE_URL=sqlite:////app/data/estoque.db
       - DATABASE_PATH=/app/data/estoque.db
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
@@ -37,6 +38,7 @@ services:
       api:
         condition: service_healthy
     environment:
+      - TZ=America/Sao_Paulo
       - API_URL=http://api:8081
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - DATABASE_URL=sqlite:////app/data/estoque.db
@@ -56,6 +58,7 @@ services:
     ports:
       - "8501:8501"
     environment:
+      - TZ=America/Sao_Paulo
       - API_URL=http://api:8081
       - BROWSER=false
       - SERVER_HEADLESS=true
