@@ -9,11 +9,14 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-# Copia arquivos necessários para o build
+# Copia apenas arquivos de dependência (mudam pouco)
 COPY pyproject.toml uv.lock README.md ./
-COPY src ./src
 
+# Instala dependências (Fica salvo em CACHE!)
 RUN uv sync --frozen --no-dev
+
+# Copia o código fonte (muda muito)
+COPY src ./src
 
 # PYTHONPATH inclui /app/src para imports absolutos (hejmai.interface.*)
 ENV PYTHONPATH=/app/src
