@@ -5,6 +5,7 @@ Este é o "cérebro" do sistema. Ele recebe perguntas em linguagem natural,
 decide qual ferramenta usar e sintetiza a resposta final.
 """
 
+import os
 from agno.agent import Agent
 from agno.models.ollama import Ollama
 
@@ -19,9 +20,12 @@ def get_coordinator_agent() -> Agent:
 
     O coordenador tem acesso às ferramentas de Inventário, Finanças e Projeção.
     """
+    # URL do Ollama (ajustada para Docker se necessário)
+    ollama_host = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
+
     return Agent(
         name="Hejmai Coordinator",
-        model=Ollama(id="qwen3.5:2b"),
+        model=Ollama(id="qwen3.5:2b", base_url=ollama_host),
         tools=[InventoryTool, FinanceTool, ProjectionTool],
         instructions=[
             "Você é o Hejmai, um assistente inteligente de gestão doméstica.",
