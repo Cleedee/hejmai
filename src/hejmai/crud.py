@@ -7,16 +7,17 @@ Todos os outros módulos (handlers, vigia, services) devem usar estas funções.
 
 import datetime
 from difflib import get_close_matches
-from sqlalchemy.orm import Session
+from typing import Any, Dict, List, Optional
+
 from sqlalchemy import func
-from typing import List, Optional, Dict, Any
+from sqlalchemy.orm import Session
 
 from hejmai import models
-
 
 # =============================================================================
 # Categorias
 # =============================================================================
+
 
 def traga_todas_categorias(db: Session) -> List[models.Categoria]:
     """Lista todas as categorias cadastradas."""
@@ -26,6 +27,7 @@ def traga_todas_categorias(db: Session) -> List[models.Categoria]:
 # =============================================================================
 # Produtos
 # =============================================================================
+
 
 def atualizar_produto(
     db: Session, produto_id: int, dados: dict
@@ -51,28 +53,18 @@ def get_todos_produtos(db: Session) -> List[models.Produto]:
 
 def get_produtos_com_estoque(db: Session) -> List[models.Produto]:
     """Lista produtos com estoque positivo."""
-    return (
-        db.query(models.Produto)
-        .filter(models.Produto.estoque_atual > 0)
-        .all()
-    )
+    return db.query(models.Produto).filter(models.Produto.estoque_atual > 0).all()
 
 
 def get_produto_por_id(db: Session, produto_id: int) -> Optional[models.Produto]:
     """Busca um produto pelo ID."""
-    return (
-        db.query(models.Produto)
-        .filter(models.Produto.id == produto_id)
-        .first()
-    )
+    return db.query(models.Produto).filter(models.Produto.id == produto_id).first()
 
 
 def get_produto_por_nome(db: Session, nome: str) -> Optional[models.Produto]:
     """Busca um produto por nome (case insensitive, match parcial)."""
     return (
-        db.query(models.Produto)
-        .filter(models.Produto.nome.ilike(f"%{nome}%"))
-        .first()
+        db.query(models.Produto).filter(models.Produto.nome.ilike(f"%{nome}%")).first()
     )
 
 
@@ -97,9 +89,7 @@ def buscar_produtos_similares(
         Lista de produtos similares, priorizando matches exatos
     """
     # 1. Match exato por substring (prioridade)
-    query = db.query(models.Produto).filter(
-        models.Produto.nome.ilike(f"%{termo}%")
-    )
+    query = db.query(models.Produto).filter(models.Produto.nome.ilike(f"%{termo}%"))
 
     if com_estoque:
         query = query.filter(models.Produto.estoque_atual > 0)
@@ -149,13 +139,13 @@ def buscar_produtos_similares(
 def get_produtos_alertas(db: Session) -> Dict[str, List[models.Produto]]:
     """
     Busca produtos com alertas de estoque baixo ou vencimento próximo.
-    
+
     Returns:
         Dict com 'estoque_baixo' e 'vencendo_em_breve'
     """
     hoje = datetime.date.today()
     proxima_semana = hoje + datetime.timedelta(days=7)
-    
+
     estoque_baixo = (
         db.query(models.Produto)
         .filter(
@@ -164,7 +154,7 @@ def get_produtos_alertas(db: Session) -> Dict[str, List[models.Produto]]:
         )
         .all()
     )
-    
+
     vencendo = (
         db.query(models.Produto)
         .filter(
@@ -174,7 +164,7 @@ def get_produtos_alertas(db: Session) -> Dict[str, List[models.Produto]]:
         )
         .all()
     )
-    
+
     return {
         "estoque_baixo": estoque_baixo,
         "vencendo_em_breve": vencendo,
@@ -185,38 +175,35 @@ def get_produtos_alertas(db: Session) -> Dict[str, List[models.Produto]]:
 # Movimentações (Consumo)
 # =============================================================================
 
-def get_consumo_periodo(
-    db: Session, 
-    produto_id: int, 
-    dias: int = 30
-) -> float:
+
+def get_consumo_periodo(db: Session, produto_id: int, dias: int = 30) -> float:
     """
     Calcula o total consumido de um produto em um período.
-    
+
     Args:
         produto_id: ID do produto
         dias: Número de dias para analisar
-    
+
     Returns:
         Quantidade total consumida no período (sempre positiva)
     """
     data_limite = datetime.date.today() - datetime.timedelta(days=dias)
-    
-    resultado = db.query(
-        func.sum(func.abs(models.Movimentacao.quantidade))
-    ).filter(
-        models.Movimentacao.produto_id == produto_id,
-        models.Movimentacao.tipo == "CONSUMO",
-        models.Movimentacao.data_movimento >= data_limite,
-    ).scalar()
-    
+
+    resultado = (
+        db.query(func.sum(func.abs(models.Movimentacao.quantidade)))
+        .filter(
+            models.Movimentacao.produto_id == produto_id,
+            models.Movimentacao.tipo == "CONSUMO",
+            models.Movimentacao.data_movimento >= data_limite,
+        )
+        .scalar()
+    )
+
     return float(resultado) if resultado else 0.0
 
 
 def get_historico_movimentacoes(
-    db: Session, 
-    produto_id: int, 
-    limite: int = 50
+    db: Session, produto_id: int, limite: int = 50
 ) -> List[models.Movimentacao]:
     """Busca as últimas movimentações de um produto."""
     return (
@@ -232,10 +219,8 @@ def get_historico_movimentacoes(
 # Compras
 # =============================================================================
 
-def get_compras_recentes(
-    db: Session, 
-    limite: int = 5
-) -> List[models.Compra]:
+
+def get_compras_recentes(db: Session, limite: int = 5) -> List[models.Compra]:
     """Lista as últimas compras realizadas (não excluídas)."""
     return (
         db.query(models.Compra)
@@ -248,28 +233,77 @@ def get_compras_recentes(
 
 def get_compra_por_id(db: Session, compra_id: int) -> Optional[models.Compra]:
     """Busca uma compra pelo ID."""
-    return (
-        db.query(models.Compra)
-        .filter(models.Compra.id == compra_id)
-        .first()
+    return db.query(models.Compra).filter(models.Compra.id == compra_id).first()
+
+
+# =============================================================================
+# Itens de Compra
+# =============================================================================
+
+
+def get_historico_precos(
+    db: Session, product_name: str, days_back: int = 90
+) -> List[Dict[str, Any]]:
+    date_limit = datetime.datetime.now() - datetime.timedelta(days=days_back)
+
+    # Query que cruza itens de compra com a data da compra
+    results = (
+        db.query(
+            models.Produto.nome,
+            models.ItensCompra.preco_pago,
+            models.Compra.data_compra,
+            models.Compra.local_compra,
+        )
+        .join(models.ItensCompra, models.Produto.id == models.ItensCompra.produto_id)
+        .join(models.Compra, models.Compra.id == models.ItensCompra.compra_id)
+        .filter(models.Produto.nome.contains(product_name))
+        .filter(models.Compra.data_compra >= date_limit)
+        .order_by(models.Compra.data_compra.desc())
+        .all()
     )
+
+    if not results:
+        return {
+            "mensagem": f"Não encontrei compras de '{product_name}' nos últimos {days_back} dias."
+        }
+
+    # Calculando métricas para o Agente ter insights
+    precos = [r.preco_pago for r in results]
+    min_price = min(precos)
+    avg_price = sum(precos) / len(precos)
+
+    return {
+        "produto": results[0].nome,
+        "menor_preco": min_price,
+        "preco_medio": round(avg_price, 2),
+        "ultima_compra": results[0].data_compra.strftime("%d/%m/%Y"),
+        "local_ultima_compra": results[0].local_compra,
+        "historico_detalhado": [
+            {
+                "data": r.data_compra.strftime("%d/%m"),
+                "preco": r.preco_pago,
+                "local": r.local_compra,
+            }
+            for r in results
+        ],
+    }
 
 
 # =============================================================================
 # Utilitários
 # =============================================================================
 
+
 def get_estatisticas_gerais(db: Session) -> Dict[str, Any]:
     """Retorna estatísticas gerais do estoque."""
     total_produtos = db.query(models.Produto).count()
-    com_estoque = db.query(models.Produto).filter(
-        models.Produto.estoque_atual > 0
-    ).count()
+    com_estoque = (
+        db.query(models.Produto).filter(models.Produto.estoque_atual > 0).count()
+    )
     sem_estoque = total_produtos - com_estoque
-    
+
     return {
         "total_produtos": total_produtos,
         "com_estoque": com_estoque,
         "sem_estoque": sem_estoque,
     }
-
