@@ -12,7 +12,8 @@ WORKDIR /app
 # Copia apenas arquivos de dependência (mudam pouco)
 COPY pyproject.toml uv.lock README.md ./
 
-# Instala dependências (Fica salvo em CACHE!)
+# Cria estrutura mínima do pacote para o uv sync conseguir buildar
+RUN mkdir -p src/hejmai && touch src/hejmai/__init__.py
 RUN uv sync --frozen --no-dev
 
 # Copia o código fonte (muda muito)

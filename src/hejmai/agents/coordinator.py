@@ -8,20 +8,20 @@ decide qual ferramenta usar e sintetiza a resposta final.
 from agno.agent import Agent
 from agno.models.ollama import Ollama
 
-from hejmai.agents.tools.inventory import InventoryTool
 from hejmai.agents.tools.finance import FinanceTool
+from hejmai.agents.tools.inventory import InventoryTool
 from hejmai.agents.tools.projection import ProjectionTool
 
 
 def get_coordinator_agent() -> Agent:
     """
     Retorna a instância do Agente Coordenador.
-    
+
     O coordenador tem acesso às ferramentas de Inventário, Finanças e Projeção.
     """
     return Agent(
         name="Hejmai Coordinator",
-        model=Ollama(id="llama3"),
+        model=Ollama(id="qwen3.5:2b"),
         tools=[InventoryTool, FinanceTool, ProjectionTool],
         instructions=[
             "Você é o Hejmai, um assistente inteligente de gestão doméstica.",
