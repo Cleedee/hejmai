@@ -36,11 +36,11 @@ async def processar_pergunta_ia(payload: schemas.PerguntaIA, db: Session = Depen
     try:
         # 1. O Analista faz a mágica (SQL -> Execução -> Resposta)
         resposta, query_gerada = await analista_ia.responder_pergunta(payload.pergunta, db)
-        
+
         # Log para debug no terminal do container
         print(f"🤖 Pergunta: {payload.pergunta}")
         print(f"💾 SQL Gerado: {query_gerada}")
-        
+
         return {
             "status": "sucesso",
             "resposta": resposta,
@@ -48,8 +48,31 @@ async def processar_pergunta_ia(payload: schemas.PerguntaIA, db: Session = Depen
         }
     except Exception as e:
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail=f"Erro interno no processamento da IA: {str(e)}"
+        )
+
+
+@app.post("/ia/agente")
+async def agente_hejmai(payload: schemas.PerguntaIA):
+    """
+    Recebe uma pergunta em linguagem natural e o Agente Coordenador
+    decide qual ferramenta usar para responder.
+    """
+    try:
+        from hejmai.agents.coordinator import get_coordinator_agent
+        
+        agent = get_coordinator_agent()
+        resposta = agent.run(payload.pergunta)
+        
+        return {
+            "status": "sucesso",
+            "resposta": resposta.content if hasattr(resposta, 'content') else str(resposta),
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro no agente: {str(e)}"
         )
 
 

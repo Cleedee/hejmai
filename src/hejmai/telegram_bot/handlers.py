@@ -10,7 +10,7 @@ Comandos:
 - /usar: Registrar consumo de produto
 - /sugerir_jantar: Sugere receita com itens vencendo
 - /lista_compras: Gera lista de compras
-- /pergunta: Pergunta em linguagem natural
+- /agente: Pergunta ao Agente IA
 - Mensagens de texto: Processa compras via NLP
 """
 
@@ -573,31 +573,38 @@ async def comando_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @authorized_handler
-async def comando_pergunta(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Faz pergunta em linguagem natural para a IA."""
+async def comando_agente(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Usa o Agente IA para responder perguntas complexas."""
+    if not await check_authorization(update, context):
+        return
+        
     pergunta = " ".join(context.args)
     if not pergunta:
         await update.message.reply_text(
-            "🤔 O que você quer saber? Ex: /pergunta quanto gastei com carne este mês?"
+            "🤔 O que você quer saber? Ex: /agente quanto arroz temos?"
         )
         return
 
-    await update.message.reply_text("🔍 Consultando o cérebro do Hejmai...")
+    await update.message.reply_text("🧠 Agente pensando...")
 
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            f"{API_URL}/ia/perguntar",
-            json={"pergunta": pergunta},
-            timeout=160.0,
-        )
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{API_URL}/ia/agente",
+                json={"pergunta": pergunta},
+                timeout=120.0,
+            )
 
-        if response.status_code == 200:
-            dados = response.json()
-            resposta_texto = dados["resposta"]
-            sql_debug = f"\n\n`SQL: {dados['query']}`" if context.args and context.args[0] == "debug" else ""
-            await update.message.reply_text(f"🤖 {resposta_texto}{sql_debug}", parse_mode="Markdown")
-        else:
-            await update.message.reply_text("❌ Erro ao processar a pergunta pela IA.")
+            if response.status_code == 200:
+                dados = response.json()
+                await update.message.reply_text(
+                    f"🤖 {dados.get('resposta', 'Sem resposta.')}", 
+                    parse_mode="Markdown"
+                )
+            else:
+                await update.message.reply_text("❌ Erro ao processar a pergunta pelo Agente.")
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ Falha na comunicação com o Agente: {e}")
 
 
 @authorized_handler
@@ -641,7 +648,7 @@ Posso te ajudar a gerenciar seu estoque doméstico.
 • /desperdicio - Registrar perda (ex: /desperdicio 1 leite)
 • /sugerir_jantar - Sugere receita
 • /lista_compras - Gera lista de compras
-• /pergunta - Pergunte à IA
+• /agente - Pergunte ao Agente IA
 
 📝 *Registro automático:*
 Envie texto descrevendo compras que eu processo automaticamente!
@@ -722,7 +729,7 @@ def criar_bot(app: Application) -> None:
     app.add_handler(CommandHandler("lista_compras", gerar_lista_orcada))
     app.add_handler(CommandHandler("ultimas_compras", comando_ultimas_compras))
     app.add_handler(CommandHandler("backup", comando_backup))
-    app.add_handler(CommandHandler("pergunta", comando_pergunta))
+    app.add_handler(CommandHandler("agente", comando_agente))
 
     # Handler de mensagens de texto (NLP)
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), registrar_compra))
