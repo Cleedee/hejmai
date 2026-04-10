@@ -241,21 +241,27 @@ def get_compra_por_id(db: Session, compra_id: int) -> Optional[models.Compra]:
 # =============================================================================
 
 
-def get_historico_precos(
-    db: Session, product_name: str, days_back: int = 90
-) -> List[Dict[str, Any]]:
+def get_historico_precos(db: Session, product_name: str, days_back: int = 90):
+    """
+    Busca o histórico de preços pagos por um produto específico nos últimos meses.
+    Útil para comparar se um preço atual vale a pena ou identificar inflação doméstica.
+
+    Args:
+        product_name: Nome parcial ou completo do produto (ex: 'Leite', 'Café').
+        days_back: Quantidade de dias de histórico (padrão 90 dias).
+    """
     date_limit = datetime.datetime.now() - datetime.timedelta(days=days_back)
 
     # Query que cruza itens de compra com a data da compra
     results = (
         db.query(
             models.Produto.nome,
-            models.ItensCompra.preco_pago,
+            models.ItemCompra.preco_pago,
             models.Compra.data_compra,
             models.Compra.local_compra,
         )
-        .join(models.ItensCompra, models.Produto.id == models.ItensCompra.produto_id)
-        .join(models.Compra, models.Compra.id == models.ItensCompra.compra_id)
+        .join(models.ItemCompra, models.Produto.id == models.ItemCompra.produto_id)
+        .join(models.Compra, models.Compra.id == models.ItemCompra.compra_id)
         .filter(models.Produto.nome.contains(product_name))
         .filter(models.Compra.data_compra >= date_limit)
         .order_by(models.Compra.data_compra.desc())

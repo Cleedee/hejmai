@@ -9,6 +9,7 @@ description = "Sistema de gestão de despensa e planejamento de refeições e ec
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "agno>=2.5.15",
     "fastapi>=0.135.2",
     "httpx>=0.28.1",
     "ollama>=0.6.1",
