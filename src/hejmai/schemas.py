@@ -105,6 +105,7 @@ class ProdutoUpdate(BaseModel):
     unidade_medida: Optional[str] = None
     estoque_atual: Optional[float] = None
     ultima_validade: Optional[date] = None
+    tags: Optional[str] = None  # Tags separadas por vírgula (ex: "iogurte,natural")
 
 
 class UnificacaoProdutos(BaseModel):

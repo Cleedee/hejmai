@@ -32,6 +32,7 @@ class Produto(Base):
     unidade_medida = Column(String)  # kg, un, l
     estoque_atual = Column(Float, default=0.0)
     ultima_validade = Column(Date)
+    tags = Column(String, nullable=True)  # Tags para agrupar produtos similares (ex: "iogurte,natural")
 
     # Relação com o histórico de preços
     historico_compras = relationship("ItemCompra", back_populates="produto")

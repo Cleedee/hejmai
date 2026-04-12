@@ -595,9 +595,9 @@ async def comando_produto(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "`/produto buscar [nome]` - Buscar produtos\n"
             "`/produto ver [nome]` - Ver detalhes\n"
             "`/produto editar [nome] | campo:valor` - Editar\n\n"
-            "*Campos editáveis:* nome, categoria, estoque, validade\n\n"
+            "*Campos editáveis:* nome, categoria, estoque, validade, tags\n\n"
             "*Exemplo:*\n"
-            "`/produto editar Arroz | estoque:5`"
+            "`/produto editar Iogurte | tags:iogurte,natural`"
         )
         return
 
@@ -676,6 +676,10 @@ async def ver_produto_telegram(update: Update, nome: str):
         texto += f"📊 Estoque: {detalhes.get('estoque_atual', 0)} {detalhes.get('unidade_medida', '')}\n"
         if detalhes.get("ultima_validade"):
             texto += f"📅 Validade: {detalhes['ultima_validade']}\n"
+        
+        tags = detalhes.get('tags', [])
+        if tags:
+            texto += f"🏷️ Tags: {', '.join(tags)}\n"
 
         historico = detalhes.get("historico_precos", {})
         if "mensagem" not in historico and historico.get("menor_preco"):
@@ -733,11 +737,13 @@ async def editar_produto_telegram(update: Update, nome: str, campos_str: str):
                         return
                 elif chave == "validade":
                     campos["ultima_validade"] = valor
+                elif chave == "tags":
+                    campos["tags"] = valor  # Tags separadas por vírgula
 
         if not campos:
             await update.message.reply_text(
                 "❌ Nenhum campo válido informado.\n"
-                "Campos: nome, categoria, estoque, validade"
+                "Campos: nome, categoria, estoque, validade, tags"
             )
             return
 

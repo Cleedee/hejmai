@@ -720,6 +720,7 @@ async def detalhes_produto(
         "unidade_medida": produto.unidade_medida,
         "estoque_atual": produto.estoque_atual,
         "ultima_validade": produto.ultima_validade,
+        "tags": produto.tags.split(",") if produto.tags else [],
         "historico_precos": historico_precos,
     }
 
