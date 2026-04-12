@@ -9,6 +9,7 @@ Comandos disponíveis:
 - /vigia_config: Configurações do vigia
 - /ultimas_compras: Ver últimas compras
 - /precos: Histórico de preços (ex: /precos arroz)
+- /produto: Gerenciar produtos (buscar/ver/editar)
 - /usar: Registrar consumo (ex: /usar 2 leite)
 - /desperdicio: Registrar perda (ex: /desperdicio 1 leite)
 - /sugerir_jantar: Sugere receita baseada no estoque
@@ -579,6 +580,187 @@ async def comando_precos(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @authorized_handler
+async def comando_produto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Gerencia produtos no estoque.
+
+    Uso:
+    /produto buscar [nome] - Busca produtos
+    /produto ver [nome] - Mostra detalhes completos
+    /produto editar [nome] | campo:valor - Edita produto
+    """
+    if not context.args:
+        await update.message.reply_text(
+            "💡 *Comandos de produto:*\n\n"
+            "`/produto buscar [nome]` - Buscar produtos\n"
+            "`/produto ver [nome]` - Ver detalhes\n"
+            "`/produto editar [nome] | campo:valor` - Editar\n\n"
+            "*Campos editáveis:* nome, categoria, estoque, validade\n\n"
+            "*Exemplo:*\n"
+            "`/produto editar Arroz | estoque:5`"
+        )
+        return
+
+    texto_completo = " ".join(context.args)
+    partes = texto_completo.split("|")
+    acao = partes[0].strip().split()[0].lower() if partes else ""
+    nome = " ".join(partes[0].strip().split()[1:]) if len(partes[0].strip().split()) > 1 else ""
+
+    if acao == "editar" and "|" in texto_completo:
+        await editar_produto_telegram(update, nome, partes[1])
+    elif acao == "buscar" and nome:
+        await buscar_produto_telegram(update, nome)
+    elif acao == "ver" and nome:
+        await ver_produto_telegram(update, nome)
+    else:
+        await buscar_produto_telegram(update, nome)
+
+
+async def buscar_produto_telegram(update: Update, nome: str):
+    """Busca e lista produtos."""
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                f"{config.API_URL()}/produtos/buscar",
+                params={"termo": nome, "com_estoque": False},
+            )
+            r.raise_for_status()
+            itens = r.json()
+
+        if not itens:
+            await update.message.reply_text(f"❓ Não encontrei '{nome}' no sistema.")
+            return
+
+        texto = f"🔍 *Resultados para '{nome}':*\n\n"
+        for i, item in enumerate(itens[:10], 1):
+            texto += f"{i}. *{item['nome']}*\n"
+            texto += f"   📦 {item['estoque_atual']} {item['unidade_medida']}\n"
+            if item.get("ultima_validade"):
+                texto += f"   📅 Vence: {item['ultima_validade']}\n"
+            texto += "\n"
+
+        texto += "💡 Use `/produto ver [nome]` para ver detalhes."
+        await update.message.reply_text(texto, parse_mode="Markdown")
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ Erro: {str(e)}")
+
+
+async def ver_produto_telegram(update: Update, nome: str):
+    """Mostra detalhes de um produto."""
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                f"{config.API_URL()}/produtos/buscar",
+                params={"termo": nome, "com_estoque": False},
+            )
+            r.raise_for_status()
+            itens = r.json()
+
+        if not itens:
+            await update.message.reply_text(f"❓ Não encontrei '{nome}' no sistema.")
+            return
+
+        produto = itens[0]
+        produto_id = produto["id"]
+
+        async with httpx.AsyncClient() as client:
+            r = await client.get(f"{config.API_URL()}/produtos/{produto_id}")
+            if r.status_code == 404:
+                await update.message.reply_text(f"❌ Produto não encontrado.")
+                return
+            detalhes = r.json()
+
+        texto = f"📦 *{detalhes['nome']}*\n\n"
+        texto += f"🏷️ Categoria: {detalhes.get('categoria', '-')}\n"
+        texto += f"📊 Estoque: {detalhes.get('estoque_atual', 0)} {detalhes.get('unidade_medida', '')}\n"
+        if detalhes.get("ultima_validade"):
+            texto += f"📅 Validade: {detalhes['ultima_validade']}\n"
+
+        historico = detalhes.get("historico_precos", {})
+        if "mensagem" not in historico and historico.get("menor_preco"):
+            texto += "\n💰 *Preços:*\n"
+            texto += f"• Menor: R$ {historico.get('menor_preco', 0):.2f}\n"
+            texto += f"• Médio: R$ {historico.get('preco_medio', 0):.2f}\n"
+            if historico.get("ultima_compra"):
+                texto += f"• Última compra: {historico.get('ultima_compra')}\n"
+                texto += f"• Local: {historico.get('local_ultima_compra', '-')}\n"
+
+        texto += "\n💡 Use `/produto editar {nome} | campo:valor` para editar."
+        await update.message.reply_text(texto, parse_mode="Markdown")
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ Erro: {str(e)}")
+
+
+async def editar_produto_telegram(update: Update, nome: str, campos_str: str):
+    """Edita um produto."""
+    if not nome:
+        await update.message.reply_text("❌ Informe o nome do produto.\nEx: `/produto editar Arroz | estoque:5`")
+        return
+
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                f"{config.API_URL()}/produtos/buscar",
+                params={"termo": nome, "com_estoque": False},
+            )
+            r.raise_for_status()
+            itens = r.json()
+
+        if not itens:
+            await update.message.reply_text(f"❓ Não encontrei '{nome}' no sistema.")
+            return
+
+        produto = itens[0]
+        produto_id = produto["id"]
+
+        campos = {}
+        for campo in campos_str.split(","):
+            campo = campo.strip()
+            if ":" in campo:
+                chave, valor = campo.split(":", 1)
+                chave = chave.strip().lower()
+                valor = valor.strip()
+
+                if chave in ("nome", "categoria"):
+                    campos[chave] = valor
+                elif chave in ("estoque", "quantidade"):
+                    try:
+                        campos["estoque_atual"] = float(valor)
+                    except ValueError:
+                        await update.message.reply_text(f"❌ Valor inválido para estoque: {valor}")
+                        return
+                elif chave == "validade":
+                    campos["ultima_validade"] = valor
+
+        if not campos:
+            await update.message.reply_text(
+                "❌ Nenhum campo válido informado.\n"
+                "Campos: nome, categoria, estoque, validade"
+            )
+            return
+
+        async with httpx.AsyncClient() as client:
+            r = await client.patch(
+                f"{config.API_URL()}/produtos/{produto_id}",
+                json=campos
+            )
+
+        if r.status_code == 200:
+            campos_editados = ", ".join([f"{k}={v}" for k, v in campos.items()])
+            await update.message.reply_text(
+                f"✅ *{produto['nome']}* atualizado!\n"
+                f"Alterações: {campos_editados}"
+            )
+        else:
+            await update.message.reply_text(f"❌ Erro ao atualizar: {r.status_code}")
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ Erro: {str(e)}")
+
+
+@authorized_handler
 async def comando_receitas(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Lista todas as receitas disponíveis."""
     try:
@@ -986,6 +1168,7 @@ Posso te ajudar a gerenciar seu estoque doméstico.
 • /vigia - Relatório do Vigia do Estoque
 • /ultimas_compras - Ver últimas compras
 • /precos - Histórico de preços (ex: /precos arroz)
+• /produto - Gerenciar produtos (buscar/ver/editar)
 • /backup - 📦 Baixar banco + configurações
 • /usar - Registrar consumo (ex: /usar 2 leite)
 • /desperdicio - Registrar perda (ex: /desperdicio 1 leite)
@@ -1080,6 +1263,7 @@ def criar_bot(app: Application) -> None:
     app.add_handler(CommandHandler("lista_compras", gerar_lista_orcada))
     app.add_handler(CommandHandler("ultimas_compras", comando_ultimas_compras))
     app.add_handler(CommandHandler("precos", comando_precos))
+    app.add_handler(CommandHandler("produto", comando_produto))
     app.add_handler(CommandHandler("backup", comando_backup))
     app.add_handler(CommandHandler("agente", comando_agente))
 

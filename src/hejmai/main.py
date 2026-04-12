@@ -701,6 +701,29 @@ async def editar_produto(
     return produto
 
 
+@app.get("/produtos/{produto_id}")
+async def detalhes_produto(
+    produto_id: int,
+    db: Session = Depends(database.get_db),
+):
+    """Retorna detalhes de um produto específico com histórico."""
+    produto = crud.get_produto_por_id(db, produto_id)
+    if not produto:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+
+    historico_precos = crud.get_historico_precos(db, produto.nome)
+
+    return {
+        "id": produto.id,
+        "nome": produto.nome,
+        "categoria": produto.categoria,
+        "unidade_medida": produto.unidade_medida,
+        "estoque_atual": produto.estoque_atual,
+        "ultima_validade": produto.ultima_validade,
+        "historico_precos": historico_precos,
+    }
+
+
 @app.post("/produtos/unificar")
 async def unificar_produtos(
     unificacao: schemas.UnificacaoProdutos,
