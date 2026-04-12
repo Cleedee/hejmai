@@ -178,7 +178,7 @@ async def comando_estoque(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Lista todo o estoque por categoria."""
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{config.API_URL()/estoque/resumo-geral")
+            response = await client.get(f"{config.API_URL()}/estoque/resumo-geral")
             estoque = response.json()
 
         if not estoque:
@@ -236,7 +236,7 @@ async def verificar_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Verifica alertas de estoque (vencimento e estoque baixo)."""
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{config.API_URL()/produtos/alertas")
+            response = await client.get(f"{config.API_URL()}/produtos/alertas")
             data = response.json()
 
         mensagem = "📊 **Relatório de Inventário**\n\n"
@@ -295,7 +295,7 @@ async def usar_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
         async with httpx.AsyncClient() as client:
             # Usa o novo endpoint de busca híbrida (ilike + fuzzy)
             r = await client.get(
-                f"{config.API_URL()/produtos/buscar",
+                f"{config.API_URL()}/produtos/buscar",
                 params={"termo": busca_nome, "com_estoque": True},
             )
             r.raise_for_status()
@@ -333,7 +333,7 @@ async def usar_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             payload = {"quantidade": qtd}
             res = await client.patch(
-                f"{config.API_URL()/produtos/consumir/{produto['id']}", params=payload
+                f"{config.API_URL()}/produtos/consumir/{produto['id']}", params=payload
             )
 
             if res.status_code == 200:
@@ -373,7 +373,7 @@ async def registrar_desperdicio(update: Update, context: ContextTypes.DEFAULT_TY
         async with httpx.AsyncClient() as client:
             # Busca produto por similaridade
             r = await client.get(
-                f"{config.API_URL()/produtos/buscar",
+                f"{config.API_URL()}/produtos/buscar",
                 params={"termo": busca_nome, "com_estoque": True},
             )
             r.raise_for_status()
@@ -392,7 +392,7 @@ async def registrar_desperdicio(update: Update, context: ContextTypes.DEFAULT_TY
             # Registra perda
             payload = {"quantidade": qtd}
             res = await client.patch(
-                f"{config.API_URL()/produtos/perda/{produto['id']}", params=payload
+                f"{config.API_URL()}/produtos/perda/{produto['id']}", params=payload
             )
 
             if res.status_code == 200:
@@ -426,7 +426,7 @@ async def sugerir_jantar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         async with httpx.AsyncClient() as client:
-            r = await client.get(f"{config.API_URL()/produtos/alertas")
+            r = await client.get(f"{config.API_URL()}/produtos/alertas")
             vencendo = r.json().get("vencendo_em_breve", [])
 
         if not vencendo:
@@ -435,7 +435,7 @@ async def sugerir_jantar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        r = await client.get(f"{config.API_URL()/sugerir-receita")
+        r = await client.get(f"{config.API_URL()}/sugerir-receita")
         resposta = r.json()
 
         await update.message.reply_text(
@@ -452,7 +452,7 @@ async def gerar_lista_orcada(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """Gera lista de compras agrupada por estabelecimento mais barato."""
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{config.API_URL()/produtos/lista-compras-detalhada")
+            response = await client.get(f"{config.API_URL()}/produtos/lista-compras-detalhada")
             dados = response.json()
 
         if not dados.get("por_estabelecimento"):
@@ -489,7 +489,7 @@ async def gerar_lista_orcada(update: Update, context: ContextTypes.DEFAULT_TYPE)
 @authorized_handler
 async def comando_precos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Mostra análise de preços de um produto usando IA.
+    Mostra histórico de preços de um produto.
     
     Uso: /precos arroz
     """
@@ -500,12 +500,11 @@ async def comando_precos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     busca_nome = " ".join(context.args)
-    await update.message.reply_text(f"💵 Analisando preços de '{busca_nome}'...")
 
     try:
-        async with httpx.AsyncClient(timeout=90.0) as client:
+        async with httpx.AsyncClient() as client:
             r = await client.get(
-                f"{config.API_URL()/produtos/buscar",
+                f"{config.API_URL()}/produtos/buscar",
                 params={"termo": busca_nome, "com_estoque": False},
             )
             r.raise_for_status()
@@ -521,35 +520,41 @@ async def comando_precos(update: Update, context: ContextTypes.DEFAULT_TYPE):
             produto_id = produto["id"]
 
             r = await client.get(
-                f"{config.API_URL()/ia/analisar-precos/{produto_id}"
+                f"{config.API_URL()}/relatorios/historico-precos/{produto_id}"
             )
 
-            if r.status_code != 200:
+            if r.status_code != 200 or not r.json():
                 await update.message.reply_text(
-                    f"❌ Erro ao analisar preços: {r.status_code}"
+                    f"📊 *Histórico de Preços: {produto['nome']}*\n\n"
+                    f"Nenhum registro de compra encontrado."
                 )
                 return
 
-            resultado = r.json()
-
-            if "insight" in resultado and resultado["insight"]:
-                texto = f"📊 *Análise: {produto['nome']}*\n\n"
-                texto += f"_{resultado['insight']}_"
-                await update.message.reply_text(texto, parse_mode="Markdown")
-            else:
+            historico = r.json()
+            
+            if not historico:
                 await update.message.reply_text(
-                    f"📊 *Histórico: {produto['nome']}*\n\n"
-                    f"Estatísticas:\n"
-                    f"• Menor: R$ {resultado['estatisticas']['menor_preco']:.2f}\n"
-                    f"• Médio: R$ {resultado['estatisticas']['preco_medio']:.2f}\n"
-                    f"• Maior: R$ {resultado['estatisticas']['maior_preco']:.2f}\n\n"
-                    f"Dados:\n" +
-                    "\n".join([
-                        f"• {d['data']}: R$ {d['preco']:.2f} ({d['local']})"
-                        for d in resultado.get("dados", [])[:5]
-                    ]),
-                    parse_mode="Markdown"
+                    f"📊 *Histórico de Preços: {produto['nome']}*\n\n"
+                    f"Nenhum registro encontrado."
                 )
+                return
+
+            precos = [h["preco"] for h in historico]
+            menor = min(precos)
+            maior = max(precos)
+            medio = sum(precos) / len(precos)
+
+            texto = f"💵 *Histórico de Preços: {produto['nome']}*\n\n"
+            texto += f"📊 Estatísticas:\n"
+            texto += f"• Menor: R$ {menor:.2f}\n"
+            texto += f"• Médio: R$ {medio:.2f}\n"
+            texto += f"• Maior: R$ {maior:.2f}\n\n"
+            texto += f"📋 Registros:\n"
+
+            for item in historico[-10:]:  # Últimos 10
+                texto += f"• {item['data'][:10]}: R$ {item['preco']:.2f} ({item['local']})\n"
+
+            await update.message.reply_text(texto, parse_mode="Markdown")
 
     except Exception as e:
         await update.message.reply_text(f"❌ Erro: {str(e)}")
@@ -560,7 +565,7 @@ async def comando_ultimas_compras(update: Update, context: ContextTypes.DEFAULT_
     """Lista as últimas compras realizadas."""
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{config.API_URL()/compras/recentes?limite=5")
+            response = await client.get(f"{config.API_URL()}/compras/recentes?limite=5")
             response.raise_for_status()
             compras = response.json()
 
@@ -678,7 +683,7 @@ async def comando_agente(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{config.API_URL()/ia/agente",
+                f"{config.API_URL()}/ia/agente",
                 json={"pergunta": pergunta},
                 timeout=120.0,
             )
@@ -706,7 +711,7 @@ async def registrar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{config.API_URL()/processar-entrada-livre",
+                f"{config.API_URL()}/processar-entrada-livre",
                 json={"texto": texto},
                 timeout=160.0,
             )
@@ -733,7 +738,7 @@ Posso te ajudar a gerenciar seu estoque doméstico.
 • /status - Ver alertas (vencimento/estoque)
 • /vigia - Relatório do Vigia do Estoque
 • /ultimas_compras - Ver últimas compras
-• /precos - Análise IA de preços (ex: /precos arroz)
+• /precos - Histórico de preços (ex: /precos arroz)
 • /backup - 📦 Baixar banco + configurações
 • /usar - Registrar consumo (ex: /usar 2 leite)
 • /desperdicio - Registrar perda (ex: /desperdicio 1 leite)
