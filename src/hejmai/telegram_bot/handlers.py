@@ -14,8 +14,9 @@ Comandos:
 - Mensagens de texto: Processa compras via NLP
 """
 
-import os
 import datetime
+import os
+
 import httpx
 from telegram import Update
 from telegram.constants import ChatAction
@@ -23,28 +24,27 @@ from telegram.ext import (
     Application,
     CommandHandler,
     ContextTypes,
+    JobQueue,
     MessageHandler,
     filters,
-    JobQueue,
 )
 
-from hejmai.database import SessionLocal
 from hejmai import crud
-from hejmai.vigia_estoque.vigia import executar_vigia
+from hejmai.database import SessionLocal
 from hejmai.vigia_estoque.analise_consumo import (
-    gerar_relatorio_texto,
     analisar_estoque,
+    gerar_relatorio_texto,
     tem_alertas_urgentes,
 )
-
+from hejmai.vigia_estoque.vigia import executar_vigia
+from hejmai.config import config
 
 # =============================================================================
 # Configuração
 # =============================================================================
 
-API_URL = os.getenv("API_URL", "http://api:8081")
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID_PESSOAL = os.getenv("TELEGRAM_CHAT_ID")
+TOKEN = config.TELEGRAM_TOKEN()
+CHAT_ID_PESSOAL = config.TELEGRAM_CHAT_ID()
 
 # Usuários permitidos (separados por vírgula)
 ALLOWED_USER_IDS = os.getenv("TELEGRAM_ALLOWED_USERS", CHAT_ID_PESSOAL or "")
@@ -86,7 +86,9 @@ def is_authorized(update: Update) -> bool:
     return False
 
 
-async def check_authorization(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+async def check_authorization(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> bool:
     """Middleware de autorização. Retorna False e envia mensagem se não autorizado."""
     if not is_authorized(update):
         await update.message.reply_text(
@@ -98,16 +100,19 @@ async def check_authorization(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 def authorized_handler(func):
     """Decorator para adicionar verificação de autorização automaticamente."""
+
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await check_authorization(update, context):
             return
         return await func(update, context)
+
     return wrapper
 
 
 # =============================================================================
 # Comandos do Vigia do Estoque (Novo)
 # =============================================================================
+
 
 @authorized_handler
 async def comando_vigia(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -133,15 +138,17 @@ async def comando_vigia(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 @authorized_handler
-async def comando_vigia_config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def comando_vigia_config(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
     """
     Mostra configuração atual do vigia.
     Uso: /vigia_config
     """
     from hejmai.vigia_estoque.analise_consumo import (
+        DIAS_ANALISE_CONSUMO,
         DIAS_PARA_ACABAR_ALERTA,
         DIAS_PARA_VENCER_ALERTA,
-        DIAS_ANALISE_CONSUMO,
     )
 
     config_texto = f"""
@@ -153,8 +160,8 @@ async def comando_vigia_config(update: Update, context: ContextTypes.DEFAULT_TYP
 • Período análise: {DIAS_ANALISE_CONSUMO} dias
 
 🤖 *Telegram*
-• Token: {'✅ Configurado' if TOKEN else '❌ Não configurado'}
-• Chat ID: `{CHAT_ID_PESSOAL or 'Não configurado'}`
+• Token: {"✅ Configurado" if TOKEN else "❌ Não configurado"}
+• Chat ID: `{CHAT_ID_PESSOAL or "Não configurado"}`
 
 💡 *Dica:* Para executar manualmente, use /vigia
 """
@@ -165,12 +172,13 @@ async def comando_vigia_config(update: Update, context: ContextTypes.DEFAULT_TYP
 # Comandos do Bot Original
 # =============================================================================
 
+
 @authorized_handler
 async def comando_estoque(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Lista todo o estoque por categoria."""
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{API_URL}/estoque/resumo-geral")
+            response = await client.get(f"{config.API_URL()/estoque/resumo-geral")
             estoque = response.json()
 
         if not estoque:
@@ -213,7 +221,9 @@ async def comando_estoque(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if len(mensagem) > 4000:
             for i in range(0, len(mensagem), 4000):
-                await update.message.reply_text(mensagem[i : i + 4000], parse_mode="Markdown")
+                await update.message.reply_text(
+                    mensagem[i : i + 4000], parse_mode="Markdown"
+                )
         else:
             await update.message.reply_text(mensagem, parse_mode="Markdown")
 
@@ -226,7 +236,7 @@ async def verificar_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Verifica alertas de estoque (vencimento e estoque baixo)."""
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{API_URL}/produtos/alertas")
+            response = await client.get(f"{config.API_URL()/produtos/alertas")
             data = response.json()
 
         mensagem = "📊 **Relatório de Inventário**\n\n"
@@ -285,8 +295,8 @@ async def usar_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
         async with httpx.AsyncClient() as client:
             # Usa o novo endpoint de busca híbrida (ilike + fuzzy)
             r = await client.get(
-                f"{API_URL}/produtos/buscar",
-                params={"termo": busca_nome, "com_estoque": True}
+                f"{config.API_URL()/produtos/buscar",
+                params={"termo": busca_nome, "com_estoque": True},
             )
             r.raise_for_status()
             itens_similares = r.json()
@@ -305,7 +315,7 @@ async def usar_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 for i, item in enumerate(itens_similares, 1):
                     texto += f"*{i}.* {item['nome']}\n"
                     texto += f"   Estoque: {item['estoque_atual']} {item['unidade_medida']}\n"
-                    if item.get('ultima_validade'):
+                    if item.get("ultima_validade"):
                         texto += f"   Validade: {item['ultima_validade']}\n"
                     texto += "\n"
 
@@ -323,7 +333,7 @@ async def usar_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             payload = {"quantidade": qtd}
             res = await client.patch(
-                f"{API_URL}/produtos/consumir/{produto['id']}", params=payload
+                f"{config.API_URL()/produtos/consumir/{produto['id']}", params=payload
             )
 
             if res.status_code == 200:
@@ -331,7 +341,9 @@ async def usar_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 texto = f"✅ **Baixa Registrada!**\n"
                 texto += f"Item: {produto['nome']}\n"
                 texto += f"Quantidade: {qtd} {produto['unidade_medida']}\n"
-                texto += f"Restante: {dados['estoque_restante']} {produto['unidade_medida']}"
+                texto += (
+                    f"Restante: {dados['estoque_restante']} {produto['unidade_medida']}"
+                )
                 await update.message.reply_text(texto, parse_mode="Markdown")
             else:
                 erro = res.json().get("detail", "Erro desconhecido")
@@ -345,13 +357,12 @@ async def usar_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def registrar_desperdicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Registra perda/desperdício de um produto.
-    
+
     Uso: /desperdicio 2 leite (perdeu 2 unidades de leite)
     """
     if len(context.args) < 2:
         await update.message.reply_text(
-            "💡 Use: /desperdicio [quantidade] [nome do item]\n"
-            "Ex: /desperdicio 2 leite"
+            "💡 Use: /desperdicio [quantidade] [nome do item]\nEx: /desperdicio 2 leite"
         )
         return
 
@@ -362,8 +373,8 @@ async def registrar_desperdicio(update: Update, context: ContextTypes.DEFAULT_TY
         async with httpx.AsyncClient() as client:
             # Busca produto por similaridade
             r = await client.get(
-                f"{API_URL}/produtos/buscar",
-                params={"termo": busca_nome, "com_estoque": True}
+                f"{config.API_URL()/produtos/buscar",
+                params={"termo": busca_nome, "com_estoque": True},
             )
             r.raise_for_status()
             itens_similares = r.json()
@@ -381,7 +392,7 @@ async def registrar_desperdicio(update: Update, context: ContextTypes.DEFAULT_TY
             # Registra perda
             payload = {"quantidade": qtd}
             res = await client.patch(
-                f"{API_URL}/produtos/perda/{produto['id']}", params=payload
+                f"{config.API_URL()/produtos/perda/{produto['id']}", params=payload
             )
 
             if res.status_code == 200:
@@ -389,14 +400,18 @@ async def registrar_desperdicio(update: Update, context: ContextTypes.DEFAULT_TY
                 texto = f"🗑️ **Perda Registrada!**\n"
                 texto += f"Item: {produto['nome']}\n"
                 texto += f"Quantidade perdida: {qtd} {produto['unidade_medida']}\n"
-                texto += f"Restante: {dados['estoque_restante']} {produto['unidade_medida']}"
+                texto += (
+                    f"Restante: {dados['estoque_restante']} {produto['unidade_medida']}"
+                )
                 await update.message.reply_text(texto, parse_mode="Markdown")
             else:
                 erro = res.json().get("detail", "Erro desconhecido")
                 await update.message.reply_text(f"❌ {erro}")
 
     except ValueError:
-        await update.message.reply_text("❌ Quantidade deve ser um número (ex: /desperdicio 0.5 leite).")
+        await update.message.reply_text(
+            "❌ Quantidade deve ser um número (ex: /desperdicio 0.5 leite)."
+        )
     except Exception as e:
         await update.message.reply_text(f"❌ Erro ao registrar perda: {e}")
 
@@ -411,7 +426,7 @@ async def sugerir_jantar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         async with httpx.AsyncClient() as client:
-            r = await client.get(f"{API_URL}/produtos/alertas")
+            r = await client.get(f"{config.API_URL()/produtos/alertas")
             vencendo = r.json().get("vencendo_em_breve", [])
 
         if not vencendo:
@@ -420,7 +435,7 @@ async def sugerir_jantar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        r = await client.get(f"{API_URL}/sugerir-receita")
+        r = await client.get(f"{config.API_URL()/sugerir-receita")
         resposta = r.json()
 
         await update.message.reply_text(
@@ -437,11 +452,13 @@ async def gerar_lista_orcada(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """Gera lista de compras agrupada por estabelecimento mais barato."""
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{API_URL}/produtos/lista-compras-detalhada")
+            response = await client.get(f"{config.API_URL()/produtos/lista-compras-detalhada")
             dados = response.json()
 
         if not dados.get("por_estabelecimento"):
-            await update.message.reply_text("✅ O estoque está em dia! Nada para comprar.")
+            await update.message.reply_text(
+                "✅ O estoque está em dia! Nada para comprar."
+            )
             return
 
         hoje = datetime.date.today().strftime("%d/%m")
@@ -453,7 +470,9 @@ async def gerar_lista_orcada(update: Update, context: ContextTypes.DEFAULT_TYPE)
         for estabelecimento, info in dados["por_estabelecimento"].items():
             texto += f"🏪 *{estabelecimento}*\n"
             for produto in info["produtos"]:
-                texto += f"  ☐ {produto['nome']} - R$ {produto['preco_referencia']:.2f}\n"
+                texto += (
+                    f"  ☐ {produto['nome']} - R$ {produto['preco_referencia']:.2f}\n"
+                )
             texto += f"  💰 Subtotal: R$ {info['total_estimado']:.2f}\n\n"
             total_geral += info["total_estimado"]
 
@@ -468,11 +487,80 @@ async def gerar_lista_orcada(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 @authorized_handler
+async def comando_precos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Mostra análise de preços de um produto usando IA.
+    
+    Uso: /precos arroz
+    """
+    if not context.args:
+        await update.message.reply_text(
+            "💡 Use: /precos [nome do produto]\nEx: /precos arroz"
+        )
+        return
+
+    busca_nome = " ".join(context.args)
+    await update.message.reply_text(f"💵 Analisando preços de '{busca_nome}'...")
+
+    try:
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            r = await client.get(
+                f"{config.API_URL()/produtos/buscar",
+                params={"termo": busca_nome, "com_estoque": False},
+            )
+            r.raise_for_status()
+            itens = r.json()
+
+            if not itens:
+                await update.message.reply_text(
+                    f"❓ Não encontrei '{busca_nome}' no sistema."
+                )
+                return
+
+            produto = itens[0]
+            produto_id = produto["id"]
+
+            r = await client.get(
+                f"{config.API_URL()/ia/analisar-precos/{produto_id}"
+            )
+
+            if r.status_code != 200:
+                await update.message.reply_text(
+                    f"❌ Erro ao analisar preços: {r.status_code}"
+                )
+                return
+
+            resultado = r.json()
+
+            if "insight" in resultado and resultado["insight"]:
+                texto = f"📊 *Análise: {produto['nome']}*\n\n"
+                texto += f"_{resultado['insight']}_"
+                await update.message.reply_text(texto, parse_mode="Markdown")
+            else:
+                await update.message.reply_text(
+                    f"📊 *Histórico: {produto['nome']}*\n\n"
+                    f"Estatísticas:\n"
+                    f"• Menor: R$ {resultado['estatisticas']['menor_preco']:.2f}\n"
+                    f"• Médio: R$ {resultado['estatisticas']['preco_medio']:.2f}\n"
+                    f"• Maior: R$ {resultado['estatisticas']['maior_preco']:.2f}\n\n"
+                    f"Dados:\n" +
+                    "\n".join([
+                        f"• {d['data']}: R$ {d['preco']:.2f} ({d['local']})"
+                        for d in resultado.get("dados", [])[:5]
+                    ]),
+                    parse_mode="Markdown"
+                )
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ Erro: {str(e)}")
+
+
+@authorized_handler
 async def comando_ultimas_compras(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Lista as últimas compras realizadas."""
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{API_URL}/compras/recentes?limite=5")
+            response = await client.get(f"{config.API_URL()/compras/recentes?limite=5")
             response.raise_for_status()
             compras = response.json()
 
@@ -505,48 +593,48 @@ async def comando_ultimas_compras(update: Update, context: ContextTypes.DEFAULT_
 async def comando_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Gera e envia backup do banco de dados e configurações.
-    
+
     Uso: /backup
     """
     user_id = update.effective_chat.id
-    
+
     # Verificar se é o dono do bot
     if CHAT_ID_PESSOAL and str(user_id) != str(CHAT_ID_PESSOAL):
         await update.message.reply_text("🔒 Este comando é restrito ao administrador.")
         return
-    
+
     await update.message.reply_text(
         "📦 Gerando backup...\n_Isso pode levar alguns segundos._",
         parse_mode="Markdown",
     )
-    
+
     try:
+        import os
         import tarfile
         import tempfile
-        import os
-        
+
         # Caminhos dos arquivos
         db_path = os.getenv("DATABASE_PATH", "/app/data/estoque.db")
         env_path = "/app/.env"
-        
+
         # Criar arquivo temporário
         with tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False) as tmp:
             backup_path = tmp.name
-        
+
         # Criar tar.gz
         with tarfile.open(backup_path, "w:gz") as tar:
             if os.path.exists(db_path):
                 tar.add(db_path, arcname="estoque.db")
             if os.path.exists(env_path):
                 tar.add(env_path, arcname=".env")
-        
+
         # Verificar se há arquivos no backup
         backup_size = os.path.getsize(backup_path)
         if backup_size < 100:  # Menor que 100 bytes = vazio
             await update.message.reply_text("❌ Nenhum arquivo encontrado para backup.")
             os.unlink(backup_path)
             return
-        
+
         # Enviar arquivo
         with open(backup_path, "rb") as f:
             await update.message.reply_document(
@@ -564,10 +652,10 @@ async def comando_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ),
                 parse_mode="Markdown",
             )
-        
+
         # Limpar arquivo temporário
         os.unlink(backup_path)
-        
+
     except Exception as e:
         await update.message.reply_text(f"❌ Erro ao gerar backup: {e}")
 
@@ -577,7 +665,7 @@ async def comando_agente(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Usa o Agente IA para responder perguntas complexas."""
     if not await check_authorization(update, context):
         return
-        
+
     pergunta = " ".join(context.args)
     if not pergunta:
         await update.message.reply_text(
@@ -590,7 +678,7 @@ async def comando_agente(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{API_URL}/ia/agente",
+                f"{config.API_URL()/ia/agente",
                 json={"pergunta": pergunta},
                 timeout=120.0,
             )
@@ -598,11 +686,13 @@ async def comando_agente(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if response.status_code == 200:
                 dados = response.json()
                 await update.message.reply_text(
-                    f"🤖 {dados.get('resposta', 'Sem resposta.')}", 
-                    parse_mode="Markdown"
+                    f"🤖 {dados.get('resposta', 'Sem resposta.')}",
+                    parse_mode="Markdown",
                 )
             else:
-                await update.message.reply_text("❌ Erro ao processar a pergunta pelo Agente.")
+                await update.message.reply_text(
+                    "❌ Erro ao processar a pergunta pelo Agente."
+                )
     except Exception as e:
         await update.message.reply_text(f"⚠️ Falha na comunicação com o Agente: {e}")
 
@@ -616,7 +706,7 @@ async def registrar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{API_URL}/processar-entrada-livre",
+                f"{config.API_URL()/processar-entrada-livre",
                 json={"texto": texto},
                 timeout=160.0,
             )
@@ -643,6 +733,7 @@ Posso te ajudar a gerenciar seu estoque doméstico.
 • /status - Ver alertas (vencimento/estoque)
 • /vigia - Relatório do Vigia do Estoque
 • /ultimas_compras - Ver últimas compras
+• /precos - Análise IA de preços (ex: /precos arroz)
 • /backup - 📦 Baixar banco + configurações
 • /usar - Registrar consumo (ex: /usar 2 leite)
 • /desperdicio - Registrar perda (ex: /desperdicio 1 leite)
@@ -660,6 +751,7 @@ Envie texto descrevendo compras que eu processo automaticamente!
 # Job Agendado (Relatório Vigia)
 # =============================================================================
 
+
 def get_authorized_chats():
     """Retorna lista de IDs de chats autorizados (usuários e grupos)."""
     chats = set()
@@ -668,7 +760,7 @@ def get_authorized_chats():
     else:
         if CHAT_ID_PESSOAL:
             chats.add(str(CHAT_ID_PESSOAL))
-            
+
     if ALLOWED_GROUP_IDS:
         chats.update([g.strip() for g in ALLOWED_GROUP_IDS.split(",") if g.strip()])
     return chats
@@ -681,7 +773,7 @@ async def job_vigia(context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         analise = analisar_estoque(db)
         relatorio = gerar_relatorio_texto(analise)
-        
+
         # Envia para todos os chats autorizados
         chats = get_authorized_chats()
         if not chats:
@@ -706,6 +798,7 @@ async def job_vigia(context: ContextTypes.DEFAULT_TYPE) -> None:
 # Inicialização
 # =============================================================================
 
+
 def criar_bot(app: Application) -> None:
     """
     Configura o bot do Telegram com handlers e jobs.
@@ -716,7 +809,7 @@ def criar_bot(app: Application) -> None:
     if not app:
         print("⚠️ Aplicação não fornecida. Bot não será configurado.")
         return
-    
+
     # Adiciona handlers de comandos
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("estoque", comando_estoque))
@@ -728,15 +821,17 @@ def criar_bot(app: Application) -> None:
     app.add_handler(CommandHandler("sugerir_jantar", sugerir_jantar))
     app.add_handler(CommandHandler("lista_compras", gerar_lista_orcada))
     app.add_handler(CommandHandler("ultimas_compras", comando_ultimas_compras))
+    app.add_handler(CommandHandler("precos", comando_precos))
     app.add_handler(CommandHandler("backup", comando_backup))
     app.add_handler(CommandHandler("agente", comando_agente))
 
     # Handler de mensagens de texto (NLP)
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), registrar_compra))
+    # app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), registrar_compra))
 
     # Jobs agendados do Vigia (08:00, 13:00, 18:00)
     if app.job_queue:
         import datetime
+
         times = [
             datetime.time(hour=8, minute=0),
             datetime.time(hour=15, minute=0),

@@ -12,7 +12,7 @@ services:
       - DATABASE_URL=sqlite:////app/data/estoque.db
       - DATABASE_PATH=/app/data/estoque.db
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
-      - MODEL=llama3
+      - MODEL=${MODEL:-qwen2.5:0.5b}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

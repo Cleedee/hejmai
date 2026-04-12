@@ -26,3 +26,6 @@ def previsao_reposicao() -> str:
         return "\n".join(linhas)
     finally:
         db.close()
+
+# Agrupando as funções para serem exportadas como uma Tool
+ProjectionTool = [previsao_reposicao]

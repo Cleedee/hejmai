@@ -256,7 +256,7 @@ def get_historico_precos(db: Session, product_name: str, days_back: int = 90):
     results = (
         db.query(
             models.Produto.nome,
-            models.ItemCompra.preco_pago,
+            models.ItemCompra.preco_unitario,
             models.Compra.data_compra,
             models.Compra.local_compra,
         )
@@ -273,8 +273,7 @@ def get_historico_precos(db: Session, product_name: str, days_back: int = 90):
             "mensagem": f"Não encontrei compras de '{product_name}' nos últimos {days_back} dias."
         }
 
-    # Calculando métricas para o Agente ter insights
-    precos = [r.preco_pago for r in results]
+    precos = [r.preco_unitario for r in results]
     min_price = min(precos)
     avg_price = sum(precos) / len(precos)
 
@@ -287,7 +286,7 @@ def get_historico_precos(db: Session, product_name: str, days_back: int = 90):
         "historico_detalhado": [
             {
                 "data": r.data_compra.strftime("%d/%m"),
-                "preco": r.preco_pago,
+                "preco": r.preco_unitario,
                 "local": r.local_compra,
             }
             for r in results

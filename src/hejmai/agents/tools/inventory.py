@@ -50,7 +50,7 @@ def verificar_alertas_estoque() -> str:
 
 @tool
 def registrar_consumo(produto_nome: str, quantidade: float) -> str:
-    """Registra o consumo de um produto no estoque."""
+    """Registra o consumo de um produto no estoque. USE SOMENTE quando o usuário EXPLICITAMENTE pedir para registrar/dar baixa em um produto."""
     db = SessionLocal()
     try:
         produto = crud.get_produto_por_nome(db, produto_nome)
@@ -60,7 +60,6 @@ def registrar_consumo(produto_nome: str, quantidade: float) -> str:
         if produto.estoque_atual < quantidade:
             return f"⚠️ Estoque insuficiente para {produto.nome}. Disponível: {produto.estoque_atual}."
         
-        # Usa o endpoint de consumo via crud ou direto no modelo
         produto.estoque_atual -= quantidade
         db.commit()
         
@@ -70,3 +69,42 @@ def registrar_consumo(produto_nome: str, quantidade: float) -> str:
         return f"❌ Erro ao registrar consumo: {e}"
     finally:
         db.close()
+
+
+@tool
+def analisar_frequencia_consumo(produto_nome: str) -> str:
+    """Analisa a frequência e histórico de consumo de um produto específico. USE para perguntas como 'com que frequência', 'quando foi consumido', 'histórico de consumo'."""
+    db = SessionLocal()
+    try:
+        produto = crud.get_produto_por_nome(db, produto_nome)
+        if not produto:
+            return f"❌ Produto '{produto_nome}' não encontrado no estoque."
+        
+        from datetime import datetime, timedelta
+        from hejmai import models
+        
+        movimentacoes = (
+            db.query(models.Movimentacao)
+            .filter(models.Movimentacao.produto_id == produto.id)
+            .filter(models.Movimentacao.tipo == "consumo")
+            .order_by(models.Movimentacao.data.desc())
+            .limit(10)
+            .all()
+        )
+        
+        if not movimentacoes:
+            return f"📊 Histórico de consumo de '{produto.nome}':\nNenhum registro de consumo encontrado no histórico."
+        
+        linhas = [f"📊 *Histórico de Consumo: {produto.nome}*\n"]
+        linhas.append(f"Quantidade atual em estoque: {produto.estoque_atual} {produto.unidade_medida}\n")
+        linhas.append("_Últimos registros:_\n")
+        
+        for m in movimentacoes:
+            data_str = m.data.strftime("%d/%m/%Y") if hasattr(m.data, 'strftime') else str(m.data)
+            linhas.append(f"• {data_str}: -{m.quantidade} {produto.unidade_medida}")
+        
+        return "\n".join(linhas)
+    finally:
+        db.close()
+
+InventoryTool = [consultar_estoque, verificar_alertas_estoque, analisar_frequencia_consumo, registrar_consumo]

@@ -7,8 +7,7 @@ import ollama
 from sqlalchemy.orm import Session
 
 from hejmai import models
-
-OLLAMA_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+from hejmai.config import config
 
 
 async def refinamento_categoria(categoria_ia: str, db: Session):
@@ -24,9 +23,9 @@ async def refinamento_categoria(categoria_ia: str, db: Session):
 
 
 class Receitas:
-    def __init__(self, model="llama2"):
-        self.model = model
-        self.client = ollama.AsyncClient(host=OLLAMA_URL)
+    def __init__(self, model: str = None):
+        self.model = model or config.MODEL()
+        self.client = ollama.AsyncClient(host=config.OLLAMA_BASE_URL())
 
     async def sugerir_receita(self, itens_vencendo: list):
         if not itens_vencendo:
@@ -54,9 +53,9 @@ class Receitas:
 
 
 class ProcessadorCompras:
-    def __init__(self, model="llama3"):
-        self.model = model
-        self.client = ollama.AsyncClient(host=OLLAMA_URL)
+    def __init__(self, model: str = None):
+        self.model = model or config.MODEL()
+        self.client = ollama.AsyncClient(host=config.OLLAMA_BASE_URL())
 
     async def extrair_dados(self, texto: str):
         hoje = datetime.date.today().isoformat()

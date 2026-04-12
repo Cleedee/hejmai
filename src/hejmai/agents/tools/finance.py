@@ -34,3 +34,33 @@ def verificar_gastos(categoria: str = None) -> str:
         return "\n".join(linhas)
     finally:
         db.close()
+
+
+@tool
+def consultar_historico_precos(produto_nome: str, dias: int = 90) -> str:
+    """
+    Consulta o histórico de preços de um produto. USE para perguntas como 'qual o preço histórico', 
+    'quanto custava', 'evolução do preço', 'melhor preço', 'onde comprei mais barato'.
+    """
+    db = SessionLocal()
+    try:
+        resultado = crud.get_historico_precos(db, produto_nome, days_back=dias)
+        
+        if "mensagem" in resultado:
+            return f"📊 *Histórico de Preços:*\n{resultado['mensagem']}"
+        
+        linhas = [f"💵 *Histórico de Preços: {resultado['produto']}*\n"]
+        linhas.append(f"📈 Menor preço: R$ {resultado['menor_preco']:.2f}")
+        linhas.append(f"📊 Preço médio: R$ {resultado['preco_medio']:.2f}")
+        linhas.append(f"📍 Última compra: {resultado['ultima_compra']} em {resultado['local_ultima_compra']}")
+        linhas.append("\n*Histórico:*\n")
+        
+        for item in resultado['historico_detalhado'][:10]:
+            linhas.append(f"• {item['data']}: R$ {item['preco']:.2f} ({item['local']})")
+        
+        return "\n".join(linhas)
+    finally:
+        db.close()
+
+# Agrupando as funções para serem exportadas como uma Tool
+FinanceTool = [resumo_financeiro, verificar_gastos, consultar_historico_precos]

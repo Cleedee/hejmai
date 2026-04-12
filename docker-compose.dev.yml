@@ -14,7 +14,7 @@ services:
       - DATABASE_URL=sqlite:////app/data/estoque.db
       - DATABASE_PATH=/app/data/estoque.db
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
-      - MODEL=llama3
+      - MODEL=${MODEL:-qwen2.5:0.5b}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -41,6 +41,7 @@ services:
       - TZ=America/Sao_Paulo
       - API_URL=http://api:8081
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - DATABASE_URL=sqlite:////app/data/estoque.db
       - DATABASE_PATH=/app/data/estoque.db
     volumes:

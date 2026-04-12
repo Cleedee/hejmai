@@ -12,11 +12,12 @@ from telegram import Update
 from telegram.ext import Application, JobQueue
 
 from hejmai.telegram_bot.handlers import criar_bot
+from hejmai.config import config
 
 
 def start():
     """Função de entrada para o script."""
-    token = os.getenv("TELEGRAM_TOKEN")
+    token = config.TELEGRAM_TOKEN()
     
     if not token:
         print("⚠️ TELEGRAM_TOKEN não configurado. Bot não será iniciado.")
@@ -24,7 +25,7 @@ def start():
         return
     
     print("🤖 Iniciando Bot do Telegram...")
-    print(f"📡 API_URL: {os.getenv('API_URL', 'http://api:8081')}")
+    print(f"📡 API_URL: {config.API_URL()}")
     
     # Cria aplicação
     app = Application.builder().token(token).build()

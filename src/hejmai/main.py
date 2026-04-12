@@ -1,6 +1,8 @@
+import asyncio
 import datetime
 from typing import List, Dict
 import os
+import httpx
 from difflib import SequenceMatcher
 
 from fastapi import Body, FastAPI, Depends, HTTPException, status, Query
@@ -10,17 +12,16 @@ from sqlalchemy import func
 from hejmai import models, schemas, database, nlp, crud
 from hejmai.validator import SanityChecker
 from hejmai.analista_ia import AnalistaEstoque
-
-MODEL = os.getenv("MODEL") or "llama3"
+from hejmai.config import config
 
 # Cria as tabelas no SQLite ao iniciar
 models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI(title="Agente de Economia Doméstica")
 
-processador_compras = nlp.ProcessadorCompras(model=MODEL)
-processador_receitas = nlp.Receitas(model=MODEL)
-analista_ia = AnalistaEstoque(model=MODEL)
+processador_compras = nlp.ProcessadorCompras(model=config.MODEL())
+processador_receitas = nlp.Receitas(model=config.MODEL())
+analista_ia = AnalistaEstoque(model=config.MODEL())
 
 
 @app.get("/")
@@ -63,7 +64,7 @@ async def agente_hejmai(payload: schemas.PerguntaIA):
         from hejmai.agents.coordinator import get_coordinator_agent
         
         agent = get_coordinator_agent()
-        resposta = agent.run(payload.pergunta)
+        resposta = await asyncio.to_thread(agent.run, payload.pergunta)
         
         return {
             "status": "sucesso",
@@ -358,6 +359,87 @@ async def historico_precos(produto_id: int, db: Session = Depends(database.get_d
         }
         for item in historico
     ]
+
+
+@app.get("/ia/analisar-precos/{produto_id}")
+async def analisar_precos(produto_id: int, db: Session = Depends(database.get_db)):
+    """
+    Analisa o histórico de preços de um produto usando IA.
+    Retorna insights sobre tendências, melhores preços e sugestões.
+    """
+    produto = db.query(models.Produto).filter(models.Produto.id == produto_id).first()
+    if not produto:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+
+    historico = (
+        db.query(models.ItemCompra)
+        .join(models.Compra)
+        .filter(
+            models.ItemCompra.produto_id == produto_id,
+            models.Compra.excluida == 0,
+        )
+        .order_by(models.Compra.data_compra)
+        .all()
+    )
+
+    if not historico:
+        return {"insight": f"Não há histórico de preços para {produto.nome}."}
+
+    dados_precos = [
+        {"data": item.compra.data_compra.strftime("%d/%m/%Y"), "preco": item.preco_unitario, "local": item.compra.local_compra}
+        for item in historico
+    ]
+
+    precos = [d["preco"] for d in dados_precos]
+    menor_preco = min(precos)
+    maior_preco = max(precos)
+    preco_medio = sum(precos) / len(precos)
+
+    prompt = f"""Analise o histórico de preços do produto *{produto.nome}* e forneça insights úteis:
+
+Histórico de compras:
+{chr(10).join([f"- {d['data']}: R$ {d['preco']:.2f} em {d['local']}" for d in dados_precos])}
+
+Estatísticas:
+- Menor preço: R$ {menor_preco:.2f}
+- Maior preço: R$ {maior_preco:.2f}
+- Preço médio: R$ {preco_medio:.2f}
+
+Responda em português de forma direta e útil. Inclua:
+1. Tendência de preço (subindo, descendo, estável)
+2. Melhor local para comprar
+3. Se vale a pena comprar agora ou esperar
+
+Máximo 3 frases."""
+    
+    try:
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            response = await client.post(
+                f"{config.OLLAMA_BASE_URL()}/api/generate",
+                json={
+                    "model": config.MODEL(),
+                    "prompt": prompt,
+                    "stream": False,
+                },
+            )
+            
+            if response.status_code == 200:
+                resultado = response.json()
+                insight = resultado.get("response", "").strip()
+                return {
+                    "produto": produto.nome,
+                    "dados": dados_precos,
+                    "estatisticas": {
+                        "menor_preco": menor_preco,
+                        "maior_preco": maior_preco,
+                        "preco_medio": round(preco_medio, 2),
+                    },
+                    "insight": insight,
+                }
+            else:
+                return {"insight": f"Erro ao consultar IA: {response.status_code}"}
+    except Exception as e:
+        return {"insight": f"Erro na comunicação com Ollama: {str(e)}"}
 
 
 @app.get("/relatorios/previsao-gastos")
