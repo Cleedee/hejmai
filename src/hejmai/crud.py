@@ -312,3 +312,134 @@ def get_estatisticas_gerais(db: Session) -> Dict[str, Any]:
         "com_estoque": com_estoque,
         "sem_estoque": sem_estoque,
     }
+
+
+# =============================================================================
+# Receitas
+# =============================================================================
+
+
+def get_todas_receitas(db: Session, ativas: bool = True) -> List[models.Receita]:
+    """Lista todas as receitas, opcionalmente só as ativas."""
+    query = db.query(models.Receita)
+    if ativas:
+        query = query.filter(models.Receita.ativa == 1)
+    return query.order_by(models.Receita.nome).all()
+
+
+def get_receita_por_id(db: Session, receita_id: int) -> Optional[models.Receita]:
+    """Busca uma receita pelo ID."""
+    return db.query(models.Receita).filter(models.Receita.id == receita_id).first()
+
+
+def criar_receita(db: Session, receita_data: dict, itens_data: List[dict]) -> models.Receita:
+    """
+    Cria uma nova receita com seus itens.
+
+    Args:
+        receita_data: Dados da receita (nome, descricao, etc.)
+        itens_data: Lista de dicts com produto_id, quantidade_porcao, observacao
+    """
+    receita = models.Receita(**receita_data)
+    db.add(receita)
+    db.flush()
+
+    for item_data in itens_data:
+        item = models.ItemReceita(receita_id=receita.id, **item_data)
+        db.add(item)
+
+    db.commit()
+    db.refresh(receita)
+    return receita
+
+
+def atualizar_receita(
+    db: Session, receita_id: int, receita_data: dict
+) -> Optional[models.Receita]:
+    """Atualiza dados de uma receita."""
+    receita = get_receita_por_id(db, receita_id)
+    if not receita:
+        return None
+
+    for campo, valor in receita_data.items():
+        if valor is not None:
+            setattr(receita, campo, valor)
+
+    db.commit()
+    db.refresh(receita)
+    return receita
+
+
+def deletar_receita(db: Session, receita_id: int) -> bool:
+    """Soft delete - desativa a receita."""
+    receita = get_receita_por_id(db, receita_id)
+    if not receita:
+        return False
+
+    receita.ativa = 0
+    db.commit()
+    return True
+
+
+def receita_pode_ser_feita(db: Session, receita: models.Receita) -> tuple[bool, List[str]]:
+    """
+    Verifica se uma receita pode ser feita com o estoque atual.
+
+    Returns:
+        (pode_fazer, lista de itens faltantes)
+    """
+    itens_faltantes = []
+
+    for item in receita.itens:
+        produto = db.query(models.Produto).filter(
+            models.Produto.id == item.produto_id
+        ).first()
+
+        if not produto:
+            itens_faltantes.append(f"{item.produto_id} (produto não existe)")
+            continue
+
+        if produto.estoque_atual < item.quantidade_porcao:
+            itens_faltantes.append(
+                f"{produto.nome} (tem {produto.estoque_atual}, precisa {item.quantidade_porcao})"
+            )
+
+    pode_fazer = len(itens_faltantes) == 0
+    return pode_fazer, itens_faltantes
+
+
+def sugerir_receitas(db: Session, max_resultados: int = 5) -> List[dict]:
+    """
+    Sugere receitas que podem ser feitas com o estoque atual.
+
+    Returns:
+        Lista de receitas com info de viabilidade.
+    """
+    receitas = get_todas_receitas(db, ativas=True)
+    sugestoes = []
+
+    for receita in receitas:
+        pode_fazer, faltantes = receita_pode_ser_feita(db, receita)
+
+        if pode_fazer:
+            status = "completa"
+        elif len(faltantes) <= len(receita.itens) / 2:
+            status = "quase"
+        else:
+            status = "inviável"
+
+        sugestoes.append({
+            "id": receita.id,
+            "nome": receita.nome,
+            "descricao": receita.descricao,
+            "tags": receita.tags,
+            "porcoes": receita.porcoes,
+            "itens_faltantes": faltantes,
+            "status": status,
+            "pode_fazer": pode_fazer,
+        })
+
+    return sorted(sugestoes, key=lambda x: (
+        0 if x["pode_fazer"] else 1,
+        len(x["itens_faltantes"]),
+    ))[:max_resultados]

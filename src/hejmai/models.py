@@ -79,3 +79,35 @@ class Movimentacao(Base):
     data_movimento = Column(DateTime(timezone=True), server_default=func.now())
 
     produto = relationship("Produto", back_populates="movimentacoes")
+
+
+class Receita(Base):
+    """Receitas predefinidas vinculadas ao estoque."""
+
+    __tablename__ = "receitas"
+
+    id = Column(Integer, primary_key=True)
+    nome = Column(String, unique=True, nullable=False)  # "Marmota", "Omelete"
+    descricao = Column(String, nullable=True)             # Descrição opcional
+    modo_preparo = Column(String, nullable=True)         # Como preparar
+    porcoes = Column(Integer, default=1)                 # Quantas porções
+    tags = Column(String, nullable=True)                 # Tags: "rapida", "fit", "barata"
+    ativa = Column(Integer, default=1)                    # 1 = ativa, 0 = desativada
+    criada_em = Column(DateTime(timezone=True), server_default=func.now())
+
+    itens = relationship("ItemReceita", back_populates="receita", cascade="all, delete-orphan")
+
+
+class ItemReceita(Base):
+    """Item de uma receita, vinculado a um produto do estoque."""
+
+    __tablename__ = "itens_receita"
+
+    id = Column(Integer, primary_key=True)
+    receita_id = Column(Integer, ForeignKey("receitas.id"), nullable=False)
+    produto_id = Column(Integer, ForeignKey("produtos.id"), nullable=False)
+    quantidade_porcao = Column(Float, nullable=False)    # Quanto usa por porção (g, un, ml)
+    observacao = Column(String, nullable=True)           # Opcional: "bem frito", "sem sal"
+
+    receita = relationship("Receita", back_populates="itens")
+    produto = relationship("Produto")

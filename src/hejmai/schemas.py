@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from datetime import date
-from typing import List, Optional
+from typing import List, Optional, Union
 
 
 class CategoriaBase(BaseModel):
@@ -15,7 +15,69 @@ class Categoria(CategoriaBase):
     id: int
 
     class Config:
-        from_attributes = True  # Permite que o Pydantic leia modelos do SQLAlchemy
+        from_attributes = True
+
+
+class ItemReceitaBase(BaseModel):
+    produto_id: int
+    quantidade_porcao: float
+    observacao: Optional[str] = None
+
+
+class ItemReceitaCreate(ItemReceitaBase):
+    pass
+
+
+class ItemReceitaResponse(ItemReceitaBase):
+    id: int
+    produto_nome: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ReceitaBase(BaseModel):
+    nome: str
+    descricao: Optional[str] = None
+    modo_preparo: Optional[str] = None
+    porcoes: int = 1
+    tags: Optional[Union[str, List[str]]] = None
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def parse_tags(cls, v):
+        if isinstance(v, list):
+            return ",".join(v)
+        return v  # Keep string as-is
+
+
+class ReceitaCreate(ReceitaBase):
+    itens: List[ItemReceitaCreate]
+
+
+class ReceitaUpdate(BaseModel):
+    nome: Optional[str] = None
+    descricao: Optional[str] = None
+    modo_preparo: Optional[str] = None
+    porcoes: Optional[int] = None
+    tags: Optional[Union[str, List[str]]] = None
+    ativa: Optional[int] = None
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def parse_tags(cls, v):
+        if isinstance(v, list):
+            return ",".join(v)
+        return v
+
+
+class ReceitaResponse(ReceitaBase):
+    id: int
+    itens: List[ItemReceitaResponse] = []
+    itens_faltantes: List[str] = []  # Produtos que não tem em estoque
+
+    class Config:
+        from_attributes = True
 
 
 class ItemEntrada(BaseModel):

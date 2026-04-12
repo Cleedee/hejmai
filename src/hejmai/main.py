@@ -519,12 +519,51 @@ async def processar_texto_bot(
 
 @app.get("/sugerir-receita")
 async def sugerir_receita(db: Session = Depends(database.get_db)):
+    """
+    Sugere receitas baseadas no estoque atual.
+    1. Primeiro verifica receitas pré-definidas que podem ser feitas
+    2. Se houver itens vencendo, complementa com sugestão de IA
+    """
+    # Buscar receitas viáveis com estoque
+    sugestoes = crud.sugerir_receitas(db)
 
-    vencendo = listar_itens_vencendo(db)
+    completas = [s for s in sugestoes if s["pode_fazer"]]
+    quase = [s for s in sugestoes if not s["pode_fazer"] and s["status"] == "quase"][:2]
 
-    receita = await processador_receitas.sugerir_receita(vencendo)
+    resposta = {
+        "status": "sucesso",
+        "receitas_completas": completas,
+        "quase_prontas": quase,
+    }
 
-    return {"status": "sucesso", "receita": receita}
+    # Se tem itens vencendo, usa IA para sugestão extra
+    vencendo = (
+        db.query(models.Produto)
+        .filter(
+            models.Produto.ultima_validade <= datetime.date.today() + datetime.timedelta(days=7),
+            models.Produto.ultima_validade >= datetime.date.today(),
+            models.Produto.estoque_atual > 0,
+        )
+        .all()
+    )
+
+    if vencendo:
+        ingredientes = ", ".join([p.nome for p in vencendo])
+        prompt = f"""
+Ingredientes que vencem em breve: {ingredientes}.
+Sugira UMA receita rápida que use esses itens. Máximo 3 passos."""
+
+        try:
+            response = await processador_receitas.client.chat(
+                model=config.MODEL(),
+                messages=[{"role": "user", "content": prompt}]
+            )
+            resposta["sugestao_ia"] = response["message"]["content"]
+            resposta["itens_vencendo"] = [p.nome for p in vencendo]
+        except Exception:
+            pass
+
+    return resposta
 
 
 @app.get("/produtos/lista-compras")
@@ -1166,6 +1205,174 @@ async def editar_compra(
             status_code=500,
             detail=f"Erro ao atualizar compra: {str(e)}"
         )
+
+
+# =============================================================================
+# Endpoints de Receitas
+# =============================================================================
+
+
+@app.get("/receitas", response_model=List[dict])
+def listar_receitas(
+    ativas: bool = True,
+    db: Session = Depends(database.get_db)
+):
+    """Lista todas as receitas."""
+    receitas = crud.get_todas_receitas(db, ativas=ativas)
+    return [
+        {
+            "id": r.id,
+            "nome": r.nome,
+            "descricao": r.descricao,
+            "modo_preparo": r.modo_preparo,
+            "porcoes": r.porcoes,
+            "tags": r.tags.split(",") if r.tags else [],
+            "ativa": r.ativa,
+            "itens": [
+                {
+                    "id": i.id,
+                    "produto_id": i.produto_id,
+                    "produto_nome": i.produto.nome if i.produto else None,
+                    "quantidade": i.quantidade_porcao,
+                    "observacao": i.observacao,
+                }
+                for i in r.itens
+            ],
+        }
+        for r in receitas
+    ]
+
+
+@app.get("/receitas/sugerir")
+def sugerir_receitas_endpoint(
+    db: Session = Depends(database.get_db)
+):
+    """Sugere receitas baseadas no estoque atual."""
+    return crud.sugerir_receitas(db)
+
+
+@app.get("/receitas/{receita_id}", response_model=dict)
+def buscar_receita(
+    receita_id: int,
+    db: Session = Depends(database.get_db)
+):
+    """Busca uma receita pelo ID com verificação de estoque."""
+    receita = crud.get_receita_por_id(db, receita_id)
+    if not receita:
+        raise HTTPException(status_code=404, detail="Receita não encontrada")
+
+    pode_fazer, faltantes = crud.receita_pode_ser_feita(db, receita)
+
+    return {
+        "id": receita.id,
+        "nome": receita.nome,
+        "descricao": receita.descricao,
+        "modo_preparo": receita.modo_preparo,
+        "porcoes": receita.porcoes,
+        "tags": receita.tags.split(",") if receita.tags else [],
+        "ativa": receita.ativa,
+        "pode_fazer": pode_fazer,
+        "itens": [
+            {
+                "produto_id": i.produto_id,
+                "produto_nome": i.produto.nome if i.produto else None,
+                "quantidade": i.quantidade_porcao,
+                "estoque_atual": i.produto.estoque_atual if i.produto else 0,
+                "observacao": i.observacao,
+            }
+            for i in receita.itens
+        ],
+        "itens_faltantes": faltantes,
+    }
+
+
+@app.post("/receitas", status_code=status.HTTP_201_CREATED)
+def criar_receita_endpoint(
+    receita: schemas.ReceitaCreate,
+    db: Session = Depends(database.get_db)
+):
+    """Cria uma nova receita com seus itens."""
+    # Verificar se nome já existe
+    existente = db.query(models.Receita).filter(
+        models.Receita.nome == receita.nome
+    ).first()
+    if existente:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Já existe uma receita com o nome '{receita.nome}'"
+        )
+
+    # Preparar dados
+    receita_data = {
+        "nome": receita.nome,
+        "descricao": receita.descricao,
+        "modo_preparo": receita.modo_preparo,
+        "porcoes": receita.porcoes,
+        "tags": ",".join(receita.tags) if receita.tags else None,
+    }
+
+    itens_data = [
+        {
+            "produto_id": item.produto_id,
+            "quantidade_porcao": item.quantidade_porcao,
+            "observacao": item.observacao,
+        }
+        for item in receita.itens
+    ]
+
+    try:
+        nova = crud.criar_receita(db, receita_data, itens_data)
+        return {
+            "status": "sucesso",
+            "mensagem": f"Receita '{nova.nome}' criada",
+            "id": nova.id,
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/receitas/{receita_id}", status_code=status.HTTP_200_OK)
+def atualizar_receita_endpoint(
+    receita_id: int,
+    receita: schemas.ReceitaUpdate,
+    db: Session = Depends(database.get_db)
+):
+    """Atualiza dados de uma receita."""
+    existente = crud.get_receita_por_id(db, receita_id)
+    if not existente:
+        raise HTTPException(status_code=404, detail="Receita não encontrada")
+
+    dados = receita.model_dump(exclude_unset=True)
+    if "tags" in dados and dados["tags"]:
+        dados["tags"] = ",".join(dados["tags"])
+
+    try:
+        atualizada = crud.atualizar_receita(db, receita_id, dados)
+        return {
+            "status": "sucesso",
+            "mensagem": f"Receita '{atualizada.nome}' atualizada",
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/receitas/{receita_id}", status_code=status.HTTP_200_OK)
+def deletar_receita_endpoint(
+    receita_id: int,
+    db: Session = Depends(database.get_db)
+):
+    """Soft delete - desativa a receita."""
+    if not crud.deletar_receita(db, receita_id):
+        raise HTTPException(status_code=404, detail="Receita não encontrada")
+
+    return {"status": "sucesso", "mensagem": "Receita desativada"}
+
+
+# =============================================================================
+# Start
+# =============================================================================
 
 
 def start():

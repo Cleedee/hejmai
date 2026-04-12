@@ -1,17 +1,23 @@
 """
 Handlers do Telegram Bot para o Hejmai.
 
-Comandos:
+Comandos disponíveis:
 - /start: Boas-vindas
-- /estoque: Ver estoque completo
-- /status: Ver alertas de estoque
-- /vigia: Executa o vigia do estoque (novo)
-- /vigia_config: Configurações do vigia (novo)
-- /usar: Registrar consumo de produto
-- /sugerir_jantar: Sugere receita com itens vencendo
+- /estoque: Ver inventário completo
+- /status: Ver alertas (vencimento/estoque)
+- /vigia: Relatório do Vigia do Estoque
+- /vigia_config: Configurações do vigia
+- /ultimas_compras: Ver últimas compras
+- /precos: Histórico de preços (ex: /precos arroz)
+- /usar: Registrar consumo (ex: /usar 2 leite)
+- /desperdicio: Registrar perda (ex: /desperdicio 1 leite)
+- /sugerir_jantar: Sugere receita baseada no estoque
+- /receitas: Lista todas as receitas
+- /receita: Ver detalhes (ex: /receita Marmota)
+- /add_receita: Criar receita (ex: /add_receita Nome | Desc | Ing:qtd)
 - /lista_compras: Gera lista de compras
 - /agente: Pergunta ao Agente IA
-- Mensagens de texto: Processa compras via NLP
+- /backup: Baixar banco + configurações
 """
 
 import datetime
@@ -418,33 +424,45 @@ async def registrar_desperdicio(update: Update, context: ContextTypes.DEFAULT_TY
 
 @authorized_handler
 async def sugerir_jantar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Sugere receita com base em itens vencendo."""
-    await update.message.reply_text("👨‍🍳 Deixe-me ver o que temos na despensa...")
+    """Sugere receita com base no estoque."""
+    await update.message.reply_text("👨‍🍳 Consultando o Chef Hejmai...")
     await context.bot.send_chat_action(
         chat_id=update.effective_chat.id, action=ChatAction.TYPING
     )
 
     try:
-        async with httpx.AsyncClient() as client:
-            r = await client.get(f"{config.API_URL()}/produtos/alertas")
-            vencendo = r.json().get("vencendo_em_breve", [])
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            r = await client.get(f"{config.API_URL()}/sugerir-receita")
+            resposta = r.json()
 
-        if not vencendo:
-            await update.message.reply_text(
-                "🌟 Parabéns! Nada está perto de vencer. Pode cozinhar o que quiser!"
-            )
-            return
+        texto = "🍽️ **Sugestões do Chef Hejmai**\n\n"
 
-        r = await client.get(f"{config.API_URL()}/sugerir-receita")
-        resposta = r.json()
+        # Receitas completas primeiro
+        completas = resposta.get("receitas_completas", [])
+        if completas:
+            texto += "✅ **Prontas para fazer:**\n"
+            for rec in completas[:3]:
+                texto += f"• {rec['nome']}\n"
+                texto += f"  _{rec['descricao']}_\n\n"
 
-        await update.message.reply_text(
-            f"💡 **Sugestão do Chef Hejmai:**\n\n{resposta['receita']}",
-            parse_mode="Markdown",
-        )
+        # Quase prontas
+        quase = resposta.get("quase_prontas", [])
+        if quase:
+            texto += "🔶 **Quase completas:**\n"
+            for rec in quase:
+                texto += f"• {rec['nome']}\n"
+                texto += f"  Faltam: {', '.join(rec['itens_faltantes'][:2])}\n\n"
+
+        # Sugestão da IA
+        sugestao_ia = resposta.get("sugestao_ia")
+        if sugestao_ia:
+            texto += "💡 **Dica do Chef:**\n"
+            texto += f"_{sugestao_ia}_"
+
+        await update.message.reply_text(texto, parse_mode="Markdown")
 
     except Exception as e:
-        await update.message.reply_text(f"❌ O Chef teve um problema na cozinha: {e}")
+        await update.message.reply_text(f"❌ Erro: {str(e)}")
 
 
 @authorized_handler
@@ -555,6 +573,235 @@ async def comando_precos(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 texto += f"• {item['data'][:10]}: R$ {item['preco']:.2f} ({item['local']})\n"
 
             await update.message.reply_text(texto, parse_mode="Markdown")
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ Erro: {str(e)}")
+
+
+@authorized_handler
+async def comando_receitas(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lista todas as receitas disponíveis."""
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(f"{config.API_URL()}/receitas")
+            receitas = r.json()
+
+        if not receitas:
+            await update.message.reply_text(
+                "📋 Nenhuma receita cadastrada ainda.\n\n"
+                "Use /add_receita para criar uma!"
+            )
+            return
+
+        texto = "📖 *Receitas Cadastradas*\n\n"
+
+        for rec in receitas:
+            tags = rec.get("tags", [])
+            tags_str = f" [{', '.join(tags)}]" if tags else ""
+            texto += f"• *{rec['nome']}*{tags_str}\n"
+            texto += f"  _{rec['descricao']}_\n\n"
+
+        texto += f"💡 Use /receita [nome] para ver detalhes"
+        await update.message.reply_text(texto, parse_mode="Markdown")
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ Erro: {str(e)}")
+
+
+@authorized_handler
+async def comando_receita_detalhe(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Mostra detalhes de uma receita específica.
+    
+    Uso: /receita Marmota
+    """
+    if not context.args:
+        await update.message.reply_text(
+            "💡 Use: /receita [nome da receita]\n"
+            "Ex: /receita Marmota\n\n"
+            "Use /receitas para ver todas."
+        )
+        return
+
+    nome_receita = " ".join(context.args)
+
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(f"{config.API_URL()}/receitas")
+            receitas = r.json()
+
+        # Buscar receita pelo nome
+        receita = None
+        for rec in receitas:
+            if rec["nome"].lower() == nome_receita.lower():
+                receita = rec
+                break
+
+        if not receita:
+            await update.message.reply_text(
+                f"❓ Não encontrei '{nome_receita}'.\n\n"
+                f"Use /receitas para ver as disponíveis."
+            )
+            return
+
+        # Buscar detalhes com estoque
+        async with httpx.AsyncClient() as client:
+            r = await client.get(f"{config.API_URL()}/receitas/{receita['id']}")
+            detalhes = r.json()
+
+        texto = f"🍽️ *{detalhes['nome']}*\n\n"
+        texto += f"_{detalhes['descricao'] or ''}_\n\n"
+
+        texto += "📦 *Ingredientes:*\n"
+        for item in detalhes.get("itens", []):
+            tem = item.get("estoque_atual", 0)
+            precisa = item.get("quantidade", 0)
+            status_emoji = "✅" if tem >= precisa else "⚠️"
+            texto += f"{status_emoji} {item['produto_nome']}: {precisa} ({tem} em estoque)\n"
+
+        if detalhes.get("modo_preparo"):
+            texto += f"\n👨‍🍳 *Modo de preparo:*\n{detalhes['modo_preparo']}\n"
+
+        tags = detalhes.get("tags", [])
+        if tags:
+            texto += f"\n🏷️ Tags: {', '.join(tags)}"
+
+        await update.message.reply_text(texto, parse_mode="Markdown")
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ Erro: {str(e)}")
+
+
+@authorized_handler
+async def comando_add_receita(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Adiciona uma nova receita.
+    
+    Uso:
+    /add_receita Nome da Receita | descrição | ingrediente1:qtd, ingrediente2:qtd | modo preparo | tags
+    
+    Exemplo:
+    /add_receita Tapioca | Tapioca simples | Farinha de tapioca:200, Sal:1 | Aqueça a frigideira... | brasileira,rapida
+    """
+    if not context.args:
+        await update.message.reply_text(
+            "💡 *Como criar uma receita:*\n\n"
+            "`/add_receita Nome | Descrição | Ing1:qtd, Ing2:qtd | Modo preparo | tags`\n\n"
+            "📝 *Exemplo:*\n"
+            "`/add_receita Tapioca | Tapioca simples | Farinha:200, Sal:1 | Aqueça a frigideira... | brasileira,rapida`\n\n"
+            "📖 Use `/receitas` para ver as existentes.",
+            parse_mode="Markdown"
+        )
+        return
+
+    texto_completo = " ".join(context.args)
+    
+    # Parse do formato: Nome | Descrição | Ing1:qtd, Ing2:qtd | Modo | Tags
+    partes = texto_completo.split("|")
+    
+    if len(partes) < 3:
+        await update.message.reply_text(
+            "❌ Formato incorreto!\n\n"
+            "Use: `/add_receita Nome | Descrição | Ing1:qtd, Ing2:qtd | Modo | Tags`\n\n"
+            "Mínimo: Nome | Descrição | Ingredientes"
+        )
+        return
+
+    nome = partes[0].strip()
+    descricao = partes[1].strip() if len(partes) > 1 else None
+    ingredientes_str = partes[2].strip() if len(partes) > 2 else ""
+    modo_preparo = partes[3].strip() if len(partes) > 3 else None
+    tags_str = partes[4].strip() if len(partes) > 4 else None
+
+    # Parse dos ingredientes
+    ingredientes_parsed = []
+    for ing in ingredientes_str.split(","):
+        ing = ing.strip()
+        if ":" in ing:
+            nome_ing, qtd = ing.rsplit(":", 1)
+            ingredientes_parsed.append({"nome": nome_ing.strip(), "quantidade": float(qtd.strip())})
+        elif ing:
+            ingredientes_parsed.append({"nome": ing, "quantidade": 1.0})
+
+    if not ingredientes_parsed:
+        await update.message.reply_text("❌ Nenhum ingrediente informado.")
+        return
+
+    await update.message.reply_text(f"🔍 Buscando produtos no estoque...")
+
+    # Buscar IDs dos produtos
+    async with httpx.AsyncClient() as client:
+        produtos_response = await client.get(
+            f"{config.API_URL()}/produtos/buscar",
+            params={"termo": "", "com_estoque": False}
+        )
+        todos_produtos = produtos_response.json()
+
+    itens_receita = []
+    nao_encontrados = []
+
+    for ing in ingredientes_parsed:
+        # Buscar produto por nome parcial
+        termo = ing["nome"]
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                f"{config.API_URL()}/produtos/buscar",
+                params={"termo": termo, "com_estoque": False}
+            )
+            resultados = r.json()
+
+        if resultados:
+            # Usa o primeiro resultado
+            itens_receita.append({
+                "produto_id": resultados[0]["id"],
+                "quantidade_porcao": ing["quantidade"],
+                "observacao": None
+            })
+        else:
+            nao_encontrados.append(ing["nome"])
+
+    if not itens_receita:
+        await update.message.reply_text(
+            f"❌ Nenhum dos ingredientes foi encontrado no estoque.\n"
+            f"Ingredientes não encontrados: {', '.join(nao_encontrados)}"
+        )
+        return
+
+    if nao_encontrados:
+        await update.message.reply_text(
+            f"⚠️ Ingredientes não encontrados (serão ignorados):\n"
+            f"{', '.join(nao_encontrados)}\n\n"
+            f"Continuando com {len(itens_receita)} ingredientes..."
+        )
+
+    # Criar a receita
+    payload = {
+        "nome": nome,
+        "descricao": descricao,
+        "modo_preparo": modo_preparo,
+        "porcoes": 1,
+        "tags": [t.strip() for t in tags_str.split(",")] if tags_str else [],
+        "itens": itens_receita
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.post(
+                f"{config.API_URL()}/receitas",
+                json=payload
+            )
+
+        if r.status_code == 201:
+            await update.message.reply_text(
+                f"✅ Receita *{nome}* criada com sucesso!\n\n"
+                f"📦 {len(itens_receita)} ingredientes adicionados.\n"
+                f"💡 Use `/receita {nome}` para ver detalhes."
+            )
+        elif r.status_code == 400:
+            erro = r.json().get("detail", "Erro desconhecido")
+            await update.message.reply_text(f"❌ {erro}")
+        else:
+            await update.message.reply_text(f"❌ Erro ao criar receita: {r.status_code}")
 
     except Exception as e:
         await update.message.reply_text(f"❌ Erro: {str(e)}")
@@ -742,7 +989,10 @@ Posso te ajudar a gerenciar seu estoque doméstico.
 • /backup - 📦 Baixar banco + configurações
 • /usar - Registrar consumo (ex: /usar 2 leite)
 • /desperdicio - Registrar perda (ex: /desperdicio 1 leite)
-• /sugerir_jantar - Sugere receita
+• /sugerir_jantar - 🍽️ Sugere receita
+• /receitas - 📖 Lista todas as receitas
+• /receita - Ver detalhes (ex: /receita Marmota)
+• /add_receita - ➕ Criar receita
 • /lista_compras - Gera lista de compras
 • /agente - Pergunte ao Agente IA
 
@@ -824,6 +1074,9 @@ def criar_bot(app: Application) -> None:
     app.add_handler(CommandHandler("usar", usar_item))
     app.add_handler(CommandHandler("desperdicio", registrar_desperdicio))
     app.add_handler(CommandHandler("sugerir_jantar", sugerir_jantar))
+    app.add_handler(CommandHandler("receitas", comando_receitas))
+    app.add_handler(CommandHandler("receita", comando_receita_detalhe))
+    app.add_handler(CommandHandler("add_receita", comando_add_receita))
     app.add_handler(CommandHandler("lista_compras", gerar_lista_orcada))
     app.add_handler(CommandHandler("ultimas_compras", comando_ultimas_compras))
     app.add_handler(CommandHandler("precos", comando_precos))
