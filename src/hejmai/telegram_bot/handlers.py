@@ -6,10 +6,10 @@ Comandos disponíveis:
 - /estoque: Ver inventário completo
 - /status: Ver alertas (vencimento/estoque)
 - /vigia: Relatório do Vigia do Estoque
-- /vigia_config: Configurações do vigia
 - /ultimas_compras: Ver últimas compras
 - /precos: Histórico de preços (ex: /precos arroz)
 - /produto: Gerenciar produtos (buscar/ver/editar)
+- /budget: Ver/definir orçamentos por categoria
 - /usar: Registrar consumo (ex: /usar 2 leite)
 - /desperdicio: Registrar perda (ex: /desperdicio 1 leite)
 - /sugerir_jantar: Sugere receita baseada no estoque
@@ -574,6 +574,97 @@ async def comando_precos(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 texto += f"• {item['data'][:10]}: R$ {item['preco']:.2f} ({item['local']})\n"
 
             await update.message.reply_text(texto, parse_mode="Markdown")
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ Erro: {str(e)}")
+
+
+@authorized_handler
+async def comando_budget(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Gerencia orçamentos por categoria.
+
+    Uso:
+    /budget - Ver performance de budgets
+    /budget definir Categoria valor - Definir limite
+    """
+    args = context.args
+
+    if not args:
+        await ver_budget_telegram(update)
+    elif args[0].lower() == "definir" and len(args) >= 3:
+        categoria = args[1]
+        try:
+            valor = float(args[2])
+            await definir_budget_telegram(update, categoria, valor)
+        except ValueError:
+            await update.message.reply_text("❌ Valor inválido.\nEx: `/budget definir Mercearia 500`")
+    else:
+        await update.message.reply_text(
+            "💡 *Comandos de budget:*\n\n"
+            "`/budget` - Ver performance\n"
+            "`/budget definir Categoria valor` - Definir limite\n\n"
+            "*Exemplo:*\n"
+            "`/budget definir Mercearia 500`"
+        )
+
+
+async def ver_budget_telegram(update: Update):
+    """Mostra performance dos budgets."""
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(f"{config.API_URL()}/relatorios/performance-budget")
+            if r.status_code != 200:
+                await update.message.reply_text("❌ Erro ao buscar budgets.")
+                return
+            performance = r.json()
+
+        if not performance:
+            await update.message.reply_text(
+                "📊 *Budgets*\n\n"
+                "Nenhum budget definido.\n\n"
+                "Use `/budget definir Categoria valor` para criar."
+            )
+            return
+
+        import datetime
+        mes_atual = datetime.datetime.now().strftime("%B/%Y").capitalize()
+
+        texto = f"📊 *Budgets - {mes_atual}*\n\n"
+
+        for item in performance:
+            cat = item["categoria"]
+            limite = item["limite"]
+            gasto = item["real"]
+            pct = item["porcentagem"]
+
+            barra = "🟢" if pct < 70 else "🟡" if pct < 100 else "🔴"
+            texto += f"{barra} *{cat}*\n"
+            texto += f"   R$ {gasto:.2f} / R$ {limite:.2f} ({pct:.0f}%)\n\n"
+
+        await update.message.reply_text(texto, parse_mode="Markdown")
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ Erro: {str(e)}")
+
+
+async def definir_budget_telegram(update: Update, categoria: str, valor: float):
+    """Define um budget para categoria."""
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.post(
+                f"{config.API_URL()}/budgets",
+                params={"categoria": categoria, "valor_limite": valor}
+            )
+
+        if r.status_code == 201:
+            await update.message.reply_text(
+                f"✅ Budget definido!\n\n"
+                f"📊 *{categoria}*: R$ {valor:.2f}/mês\n\n"
+                f"Use `/budget` para ver a performance."
+            )
+        else:
+            await update.message.reply_text(f"❌ Erro: {r.status_code}")
 
     except Exception as e:
         await update.message.reply_text(f"❌ Erro: {str(e)}")
@@ -1175,6 +1266,7 @@ Posso te ajudar a gerenciar seu estoque doméstico.
 • /ultimas_compras - Ver últimas compras
 • /precos - Histórico de preços (ex: /precos arroz)
 • /produto - Gerenciar produtos (buscar/ver/editar)
+• /budget - Ver/definir orçamentos por categoria
 • /backup - 📦 Baixar banco + configurações
 • /usar - Registrar consumo (ex: /usar 2 leite)
 • /desperdicio - Registrar perda (ex: /desperdicio 1 leite)
@@ -1270,6 +1362,7 @@ def criar_bot(app: Application) -> None:
     app.add_handler(CommandHandler("ultimas_compras", comando_ultimas_compras))
     app.add_handler(CommandHandler("precos", comando_precos))
     app.add_handler(CommandHandler("produto", comando_produto))
+    app.add_handler(CommandHandler("budget", comando_budget))
     app.add_handler(CommandHandler("backup", comando_backup))
     app.add_handler(CommandHandler("agente", comando_agente))
 

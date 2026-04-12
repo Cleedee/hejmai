@@ -108,23 +108,25 @@ async def lista_todas_categorias(db: Session = Depends(database.get_db)):
 
 @app.get("/relatorios/performance-budget")
 async def performance_budget(db: Session = Depends(database.get_db)):
-    mes_atual = 4  # Abril
-    ano_atual = 2026
+    mes_atual = datetime.datetime.now().month
+    ano_atual = datetime.datetime.now().year
 
-    # 1. Busca os limites definidos
     limites = (
-        db.query(models.Budget).filter(models.Budget.mes_referencia == mes_atual).all()
+        db.query(models.Budget).filter(
+            models.Budget.mes_referencia == mes_atual,
+            models.Budget.ano_referencia == ano_atual
+        ).all()
     )
 
     performance = []
     for lim in limites:
-        # 2. Soma quanto já foi gasto nessa categoria no mês
         gasto_real = (
-            db.query(func.sum(models.ItemCompra.preco_pago))
+            db.query(func.sum(models.ItemCompra.preco_unitario * models.ItemCompra.quantidade))
             .join(models.Compra)
+            .join(models.Produto)
             .filter(
                 models.Produto.categoria == lim.categoria,
-                models.Compra.excluida == 0,  # Apenas compras ativas
+                models.Compra.excluida == 0,
                 func.extract("month", models.Compra.data_compra) == mes_atual,
                 func.extract("year", models.Compra.data_compra) == ano_atual,
             )
@@ -132,18 +134,83 @@ async def performance_budget(db: Session = Depends(database.get_db)):
             or 0.0
         )
 
-        performance.append(
-            {
-                "categoria": lim.categoria,
-                "limite": lim.valor_limite,
-                "real": gasto_real,
-                "porcentagem": (
-                    (gasto_real / lim.valor_limite) * 100 if lim.valor_limite > 0 else 0
-                ),
-            }
-        )
+        performance.append({
+            "categoria": lim.categoria,
+            "limite": lim.valor_limite,
+            "real": gasto_real,
+            "porcentagem": (gasto_real / lim.valor_limite) * 100 if lim.valor_limite > 0 else 0,
+        })
 
     return performance
+
+
+@app.get("/budgets")
+async def listar_budgets(db: Session = Depends(database.get_db)):
+    """Lista todos os budgets do mês atual."""
+    mes_atual = datetime.datetime.now().month
+    ano_atual = datetime.datetime.now().year
+
+    budgets = (
+        db.query(models.Budget).filter(
+            models.Budget.mes_referencia == mes_atual,
+            models.Budget.ano_referencia == ano_atual
+        ).all()
+    )
+
+    return [
+        {
+            "id": b.id,
+            "categoria": b.categoria,
+            "valor_limite": b.valor_limite,
+            "mes_referencia": b.mes_referencia,
+            "ano_referencia": b.ano_referencia,
+        }
+        for b in budgets
+    ]
+
+
+@app.post("/budgets", status_code=status.HTTP_201_CREATED)
+async def criar_budget(
+    categoria: str,
+    valor_limite: float,
+    db: Session = Depends(database.get_db)
+):
+    """Cria ou atualiza um budget para categoria no mês atual."""
+    mes_atual = datetime.datetime.now().month
+    ano_atual = datetime.datetime.now().year
+
+    existente = db.query(models.Budget).filter(
+        models.Budget.categoria == categoria,
+        models.Budget.mes_referencia == mes_atual,
+        models.Budget.ano_referencia == ano_atual
+    ).first()
+
+    if existente:
+        existente.valor_limite = valor_limite
+        db.commit()
+        return {"status": "atualizado", "id": existente.id}
+
+    budget = models.Budget(
+        categoria=categoria,
+        valor_limite=valor_limite,
+        mes_referencia=mes_atual,
+        ano_referencia=ano_atual
+    )
+    db.add(budget)
+    db.commit()
+    return {"status": "criado", "id": budget.id}
+
+
+@app.delete("/budgets/{budget_id}", status_code=status.HTTP_200_OK)
+async def deletar_budget(budget_id: int, db: Session = Depends(database.get_db)):
+    """Remove um budget."""
+    budget = db.query(models.Budget).filter(models.Budget.id == budget_id).first()
+    if not budget:
+        raise HTTPException(status_code=404, detail="Budget não encontrado")
+
+    db.delete(budget)
+    db.commit()
+    return {"status": "deletado"}
 
 
 @app.get("/produtos/todos")
