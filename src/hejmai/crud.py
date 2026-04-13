@@ -119,7 +119,7 @@ def buscar_produtos_similares(
             termo_normalizado,
             nomes_para_busca,
             n=10,
-            cutoff=0.5,
+            cutoff=0.75,
         )
 
         # Mapeia de volta para produtos (pode ter duplicatas na primeira palavra)
@@ -332,7 +332,9 @@ def get_receita_por_id(db: Session, receita_id: int) -> Optional[models.Receita]
     return db.query(models.Receita).filter(models.Receita.id == receita_id).first()
 
 
-def criar_receita(db: Session, receita_data: dict, itens_data: List[dict]) -> models.Receita:
+def criar_receita(
+    db: Session, receita_data: dict, itens_data: List[dict]
+) -> models.Receita:
     """
     Cria uma nova receita com seus itens.
 
@@ -381,7 +383,9 @@ def deletar_receita(db: Session, receita_id: int) -> bool:
     return True
 
 
-def receita_pode_ser_feita(db: Session, receita: models.Receita) -> tuple[bool, List[str]]:
+def receita_pode_ser_feita(
+    db: Session, receita: models.Receita
+) -> tuple[bool, List[str]]:
     """
     Verifica se uma receita pode ser feita com o estoque atual.
 
@@ -391,9 +395,11 @@ def receita_pode_ser_feita(db: Session, receita: models.Receita) -> tuple[bool, 
     itens_faltantes = []
 
     for item in receita.itens:
-        produto = db.query(models.Produto).filter(
-            models.Produto.id == item.produto_id
-        ).first()
+        produto = (
+            db.query(models.Produto)
+            .filter(models.Produto.id == item.produto_id)
+            .first()
+        )
 
         if not produto:
             itens_faltantes.append(f"{item.produto_id} (produto não existe)")
@@ -428,18 +434,23 @@ def sugerir_receitas(db: Session, max_resultados: int = 5) -> List[dict]:
         else:
             status = "inviável"
 
-        sugestoes.append({
-            "id": receita.id,
-            "nome": receita.nome,
-            "descricao": receita.descricao,
-            "tags": receita.tags,
-            "porcoes": receita.porcoes,
-            "itens_faltantes": faltantes,
-            "status": status,
-            "pode_fazer": pode_fazer,
-        })
+        sugestoes.append(
+            {
+                "id": receita.id,
+                "nome": receita.nome,
+                "descricao": receita.descricao,
+                "tags": receita.tags,
+                "porcoes": receita.porcoes,
+                "itens_faltantes": faltantes,
+                "status": status,
+                "pode_fazer": pode_fazer,
+            }
+        )
 
-    return sorted(sugestoes, key=lambda x: (
-        0 if x["pode_fazer"] else 1,
-        len(x["itens_faltantes"]),
-    ))[:max_resultados]
+    return sorted(
+        sugestoes,
+        key=lambda x: (
+            0 if x["pode_fazer"] else 1,
+            len(x["itens_faltantes"]),
+        ),
+    )[:max_resultados]
