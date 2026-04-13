@@ -1087,6 +1087,67 @@ async def comando_add_receita(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 @authorized_handler
+async def comando_editar_item_receita(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Edita um ingrediente de receita.
+    
+    Uso: /editar_item <receita_id> <item_id> <novo_produto>
+    Exemplo: /editar_item 1 5 10
+    """
+    args = " ".join(context.args) if context.args else ""
+
+    if not args:
+        await update.message.reply_text(
+            "✏️ *Editar ingrediente de receita*\n\n"
+            "Uso: /editar_item <receita_id> <item_id> <produto_id>\n\n"
+            "1. Use `/receita <nome>` para ver os IDs\n"
+            "2. Copie o receita_id e item_id do ingrediente\n"
+            "3. Use `/produto buscar <nome>` para descobrir o produto_id correto",
+            parse_mode="Markdown"
+        )
+        return
+
+    partes = args.split()
+    if len(partes) < 3:
+        await update.message.reply_text(
+            "❌ Formato: `/editar_item <receita_id> <item_id> <produto_id>`\n\n"
+            "Exemplo: `/editar_item 1 5 10`"
+        )
+        return
+
+    try:
+        receita_id = int(partes[0])
+        item_id = int(partes[1])
+        produto_id = int(partes[2])
+    except ValueError:
+        await update.message.reply_text("❌ IDs devem ser números inteiros")
+        return
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.patch(
+                f"{config.API_URL()}/receitas/{receita_id}/itens/{item_id}",
+                params={"produto_id": produto_id}
+            )
+
+        if r.status_code == 200:
+            data = r.json()
+            item = data["item"]
+            await update.message.reply_text(
+                f"✅ Ingrediente atualizado!\n\n"
+                f"• Produto: {item['produto_nome']}\n"
+                f"• Quantidade: {item['quantidade_porcao']}"
+            )
+        elif r.status_code == 404:
+            await update.message.reply_text("❌ Receita ou item não encontrado")
+        else:
+            await update.message.reply_text(f"❌ Erro: {r.json().get('detail', 'Erro desconhecido')}")
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ Erro: {str(e)}")
+
+
+@authorized_handler
 async def comando_ultimas_compras(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Lista as últimas compras realizadas."""
     try:
@@ -1358,6 +1419,7 @@ def criar_bot(app: Application) -> None:
     app.add_handler(CommandHandler("receitas", comando_receitas))
     app.add_handler(CommandHandler("receita", comando_receita_detalhe))
     app.add_handler(CommandHandler("add_receita", comando_add_receita))
+    app.add_handler(CommandHandler("editar_item", comando_editar_item_receita))
     app.add_handler(CommandHandler("lista_compras", gerar_lista_orcada))
     app.add_handler(CommandHandler("ultimas_compras", comando_ultimas_compras))
     app.add_handler(CommandHandler("precos", comando_precos))

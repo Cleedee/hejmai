@@ -383,6 +383,51 @@ def deletar_receita(db: Session, receita_id: int) -> bool:
     return True
 
 
+def atualizar_item_receita(
+    db: Session, item_id: int, produto_id: int = None, 
+    quantidade_porcao: float = None, observacao: str = None
+) -> Optional[models.ItemReceita]:
+    """Atualiza um item de receita (ingrediente)."""
+    item = db.query(models.ItemReceita).filter(
+        models.ItemReceita.id == item_id
+    ).first()
+    
+    if not item:
+        return None
+    
+    if produto_id is not None:
+        produto = db.query(models.Produto).filter(
+            models.Produto.id == produto_id
+        ).first()
+        if not produto:
+            raise ValueError(f"Produto {produto_id} não encontrado")
+        item.produto_id = produto_id
+    
+    if quantidade_porcao is not None:
+        item.quantidade_porcao = quantidade_porcao
+    
+    if observacao is not None:
+        item.observacao = observacao
+    
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+def remover_item_receita(db: Session, item_id: int) -> bool:
+    """Remove um item de receita."""
+    item = db.query(models.ItemReceita).filter(
+        models.ItemReceita.id == item_id
+    ).first()
+    
+    if not item:
+        return False
+    
+    db.delete(item)
+    db.commit()
+    return True
+
+
 def receita_pode_ser_feita(
     db: Session, receita: models.Receita
 ) -> tuple[bool, List[str]]:

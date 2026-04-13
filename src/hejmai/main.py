@@ -1461,6 +1461,66 @@ def deletar_receita_endpoint(
     return {"status": "sucesso", "mensagem": "Receita desativada"}
 
 
+@app.patch("/receitas/{receita_id}/itens/{item_id}")
+def atualizar_item_receita_endpoint(
+    receita_id: int,
+    item_id: int,
+    produto_id: int = None,
+    quantidade_porcao: float = None,
+    observacao: str = None,
+    db: Session = Depends(database.get_db)
+):
+    """Atualiza um ingrediente de receita (produto, quantidade ou observação)."""
+    receita = crud.get_receita_por_id(db, receita_id)
+    if not receita:
+        raise HTTPException(status_code=404, detail="Receita não encontrada")
+    
+    item = next((i for i in receita.itens if i.id == item_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    
+    try:
+        atualizado = crud.atualizar_item_receita(
+            db, item_id, produto_id, quantidade_porcao, observacao
+        )
+        return {
+            "status": "sucesso",
+            "item": {
+                "id": atualizado.id,
+                "produto_id": atualizado.produto_id,
+                "produto_nome": atualizado.produto.nome if atualizado.produto else None,
+                "quantidade_porcao": atualizado.quantidade_porcao,
+                "observacao": atualizado.observacao,
+            }
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/receitas/{receita_id}/itens/{item_id}")
+def remover_item_receita_endpoint(
+    receita_id: int,
+    item_id: int,
+    db: Session = Depends(database.get_db)
+):
+    """Remove um ingrediente de receita."""
+    receita = crud.get_receita_por_id(db, receita_id)
+    if not receita:
+        raise HTTPException(status_code=404, detail="Receita não encontrada")
+    
+    item = next((i for i in receita.itens if i.id == item_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    
+    if not crud.remover_item_receita(db, item_id):
+        raise HTTPException(status_code=500, detail="Erro ao remover item")
+    
+    return {"status": "sucesso", "mensagem": "Item removido"}
+
+
 # =============================================================================
 # Start
 # =============================================================================
