@@ -1071,11 +1071,22 @@ async def comando_add_receita(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
 
         if r.status_code == 201:
-            await update.message.reply_text(
-                f"✅ Receita *{nome}* criada com sucesso!\n\n"
-                f"📦 {len(itens_receita)} ingredientes adicionados.\n"
-                f"💡 Use `/receita {nome}` para ver detalhes."
-            )
+            data = r.json()
+            pendentes = data.get("pendentes", [])
+            
+            texto = f"✅ Receita *{nome}* criada com sucesso!\n\n"
+            texto += f"📦 {len(itens_receita)} ingredientes adicionados.\n"
+            
+            if pendentes:
+                texto += f"\n⚠️ *{len(pendentes)} ingredientes pendentes*\n"
+                texto += "_Produtos não encontrados no estoque. Use `/editar_item` para vincular._\n"
+                for p in pendentes[:5]:
+                    texto += f"• {p['observacao']} ({p['quantidade']})\n"
+                if len(pendentes) > 5:
+                    texto += f"_... e mais {len(pendentes) - 5}_"
+            
+            texto += f"\n💡 Use `/receita {nome}` para ver detalhes."
+            await update.message.reply_text(texto, parse_mode="Markdown")
         elif r.status_code == 400:
             erro = r.json().get("detail", "Erro desconhecido")
             await update.message.reply_text(f"❌ {erro}")

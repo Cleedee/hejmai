@@ -334,25 +334,56 @@ def get_receita_por_id(db: Session, receita_id: int) -> Optional[models.Receita]
 
 def criar_receita(
     db: Session, receita_data: dict, itens_data: List[dict]
-) -> models.Receita:
+) -> tuple[models.Receita, List[dict]]:
     """
     Cria uma nova receita com seus itens.
 
     Args:
         receita_data: Dados da receita (nome, descricao, etc.)
         itens_data: Lista de dicts com produto_id, quantidade_porcao, observacao
+
+    Returns:
+        Tupla (receita, lista de ingredientes pendentes)
     """
     receita = models.Receita(**receita_data)
     db.add(receita)
     db.flush()
 
+    pendentes = []
     for item_data in itens_data:
+        produto_id = item_data.get("produto_id")
+        observacao = item_data.get("observacao", "")
+
+        if produto_id is None or produto_id == 0:
+            pendentes.append({
+                "observacao": observacao,
+                "quantidade": item_data.get("quantidade_porcao"),
+            })
+            item_data["produto_id"] = 0
+
         item = models.ItemReceita(receita_id=receita.id, **item_data)
         db.add(item)
 
     db.commit()
     db.refresh(receita)
-    return receita
+    return receita, pendentes
+
+
+def receita_ingredientes_pendentes(db: Session, receita_id: int) -> List[dict]:
+    """Retorna lista de ingredientes sem produto vinculado."""
+    receita = get_receita_por_id(db, receita_id)
+    if not receita:
+        return []
+
+    pendentes = []
+    for item in receita.itens:
+        if item.produto_id == 0 or item.produto_id is None:
+            pendentes.append({
+                "item_id": item.id,
+                "observacao": item.observacao,
+                "quantidade_porcao": item.quantidade_porcao,
+            })
+    return pendentes
 
 
 def atualizar_receita(

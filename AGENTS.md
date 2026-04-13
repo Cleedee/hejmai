@@ -82,9 +82,11 @@ data/
 
 ### Recipes (`/receitas`)
 - Predefined recipes with linked ingredients
+- **Pending ingredients**: Ingredients without matching products are allowed (marked with `produto_id=0`)
 - Tag-based fallback matching (finds similar products when exact match fails)
 - Suggestions based on expiring items
 - Ingredient matching with stock
+- Edit/remove individual ingredients via API or `/editar_item`
 
 ### Budget (`/budgets`)
 - Category-based budget limits
@@ -112,10 +114,43 @@ data/
 /receitas           - Lista receitas
 /receita <nome>     - Detalhes da receita
 /add_receita        - Criar receita
+/editar_item        - Editar ingrediente (correção de produto)
 /tm_*               - TheMealDB (branch feature/themealdb-import)
 /lista_compras      - Lista de compras
 /agente             - Pergunta à IA
 /backup             - Baixar banco
+```
+
+---
+
+## Pending Ingredients System
+
+When creating a recipe, if an ingredient's product is not found in the database:
+
+1. **Allowed**: Recipe is created successfully
+2. **Marked**: Ingredient is saved with `produto_id=0` (pending)
+3. **Notified**: API response includes `pendentes` list with missing items
+4. **Correctable**: Use `/editar_item` or `PATCH /receitas/{id}/itens/{item_id}` to link the correct product
+
+### API Responses
+
+**Creating recipe with pending ingredients:**
+```json
+{
+  "status": "sucesso",
+  "mensagem": "Receita 'X' criada (2 ingredientes pendentes)",
+  "id": 1,
+  "total_itens": 5,
+  "pendentes": [
+    {"observacao": "Sal rosa", "quantidade": 1},
+    {"observacao": "Açafrão", "quantidade": 0.5}
+  ]
+}
+```
+
+**Listing pending ingredients:**
+```
+GET /receitas/{id}/pendentes
 ```
 
 ---
@@ -142,7 +177,7 @@ Products and recipes use tags for organization:
 - `itens_compra` - Items per purchase
 - `categorias` - Categories
 - `receitas` - Recipes
-- `itens_receita` - Recipe ingredients
+- `itens_receita` - Recipe ingredients (produto_id=0 means pending)
 - `budgets` - Budget limits
 - `historico_precos` - Price history
 

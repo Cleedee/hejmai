@@ -1382,8 +1382,10 @@ def criar_receita_endpoint(
     receita: schemas.ReceitaCreate,
     db: Session = Depends(database.get_db)
 ):
-    """Cria uma nova receita com seus itens."""
-    # Verificar se nome já existe
+    """Cria uma nova receita com seus itens.
+    
+    Ingredientes sem produto_id são marcados como pendentes.
+    """
     existente = db.query(models.Receita).filter(
         models.Receita.nome == receita.nome
     ).first()
@@ -1393,7 +1395,6 @@ def criar_receita_endpoint(
             detail=f"Já existe uma receita com o nome '{receita.nome}'"
         )
 
-    # Preparar dados
     receita_data = {
         "nome": receita.nome,
         "descricao": receita.descricao,
@@ -1412,12 +1413,20 @@ def criar_receita_endpoint(
     ]
 
     try:
-        nova = crud.criar_receita(db, receita_data, itens_data)
-        return {
+        nova, pendentes = crud.criar_receita(db, receita_data, itens_data)
+        
+        response = {
             "status": "sucesso",
             "mensagem": f"Receita '{nova.nome}' criada",
             "id": nova.id,
+            "total_itens": len(itens_data),
         }
+        
+        if pendentes:
+            response["pendentes"] = pendentes
+            response["mensagem"] += f" ({len(pendentes)} ingredientes pendentes)"
+        
+        return response
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -1519,6 +1528,25 @@ def remover_item_receita_endpoint(
         raise HTTPException(status_code=500, detail="Erro ao remover item")
     
     return {"status": "sucesso", "mensagem": "Item removido"}
+
+
+@app.get("/receitas/{receita_id}/pendentes")
+def receita_pendentes_endpoint(
+    receita_id: int,
+    db: Session = Depends(database.get_db)
+):
+    """Lista ingredientes pendentes de uma receita."""
+    receita = crud.get_receita_por_id(db, receita_id)
+    if not receita:
+        raise HTTPException(status_code=404, detail="Receita não encontrada")
+
+    pendentes = crud.receita_ingredientes_pendentes(db, receita_id)
+    return {
+        "receita_id": receita_id,
+        "receita_nome": receita.nome,
+        "total_pendentes": len(pendentes),
+        "pendentes": pendentes,
+    }
 
 
 # =============================================================================
