@@ -762,7 +762,8 @@ async def ver_produto_telegram(update: Update, nome: str):
                 return
             detalhes = r.json()
 
-        texto = f"📦 *{detalhes['nome']}*\n\n"
+        texto = f"📦 *{detalhes['nome']}*\n"
+        texto += f"_ID: {detalhes['id']}_\n\n"
         texto += f"🏷️ Categoria: {detalhes.get('categoria', '-')}\n"
         texto += f"📊 Estoque: {detalhes.get('estoque_atual', 0)} {detalhes.get('unidade_medida', '')}\n"
         if detalhes.get("ultima_validade"):
@@ -877,7 +878,7 @@ async def comando_receitas(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for rec in receitas:
             tags = rec.get("tags", [])
             tags_str = f" [{', '.join(tags)}]" if tags else ""
-            texto += f"• *{rec['nome']}*{tags_str}\n"
+            texto += f"• *{rec['nome']}* (ID: {rec['id']}){tags_str}\n"
             texto += f"  _{rec['descricao']}_\n\n"
 
         texto += f"💡 Use /receita [nome] para ver detalhes"
@@ -928,7 +929,8 @@ async def comando_receita_detalhe(update: Update, context: ContextTypes.DEFAULT_
             r = await client.get(f"{config.API_URL()}/receitas/{receita['id']}")
             detalhes = r.json()
 
-        texto = f"🍽️ *{detalhes['nome']}*\n\n"
+        texto = f"🍽️ *{detalhes['nome']}*\n"
+        texto += f"_ID: {detalhes['id']}_\n\n"
         texto += f"_{detalhes['descricao'] or ''}_\n\n"
 
         texto += "📦 *Ingredientes:*\n"
@@ -936,7 +938,7 @@ async def comando_receita_detalhe(update: Update, context: ContextTypes.DEFAULT_
             tem = item.get("estoque_atual", 0)
             precisa = item.get("quantidade", 0)
             status_emoji = "✅" if tem >= precisa else "⚠️"
-            texto += f"{status_emoji} {item['produto_nome']}: {precisa} ({tem} em estoque)\n"
+            texto += f"{status_emoji} [{item['id']}] {item['produto_nome']}: {precisa} ({tem} em estoque)\n"
 
         if detalhes.get("modo_preparo"):
             texto += f"\n👨‍🍳 *Modo de preparo:*\n{detalhes['modo_preparo']}\n"
@@ -1109,19 +1111,20 @@ async def comando_editar_item_receita(update: Update, context: ContextTypes.DEFA
 
     if not args:
         await update.message.reply_text(
-            "✏️ *Editar ingrediente de receita*\n\n"
-            "Uso: /editar_item <receita_id> <item_id> <produto_id>\n\n"
+            "✏️ Editar ingrediente de receita\n\n"
+            "Uso:\n"
+            "`/editar_item <receita_id> <item_id> <produto_id>`\n\n"
             "1. Use `/receita <nome>` para ver os IDs\n"
             "2. Copie o receita_id e item_id do ingrediente\n"
-            "3. Use `/produto buscar <nome>` para descobrir o produto_id correto",
-            parse_mode="Markdown"
+            "3. Use `/produto buscar <nome>` para descobrir o produto_id correto"
         )
         return
 
     partes = args.split()
     if len(partes) < 3:
         await update.message.reply_text(
-            "❌ Formato: `/editar_item <receita_id> <item_id> <produto_id>`\n\n"
+            "❌ Formato:\n"
+            "`/editar_item <receita_id> <item_id> <produto_id>`\n\n"
             "Exemplo: `/editar_item 1 5 10`"
         )
         return

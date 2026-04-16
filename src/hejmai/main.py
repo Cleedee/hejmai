@@ -334,9 +334,11 @@ async def gerar_lista_detalhada(db: Session = Depends(database.get_db)):
             })
             continue
 
-        # Calcula preço médio por estabelecimento
+        # Calcula preço médio por estabelecimento (ignora preços zero)
         precos_por_local = {}
         for item_compra, compra in historico:
+            if item_compra.preco_unitario <= 0:
+                continue
             local = compra.local_compra
             if local not in precos_por_local:
                 precos_por_local[local] = []
@@ -347,6 +349,19 @@ async def gerar_lista_detalhada(db: Session = Depends(database.get_db)):
             local: sum(precos) / len(precos)
             for local, precos in precos_por_local.items()
         }
+
+        # Se todos os preços eram zero, marca como sem histórico válido
+        if not medias:
+            produtos_analise.append({
+                "nome": p.nome,
+                "categoria": p.categoria,
+                "preco_referencia": 0.0,
+                "estoque": p.estoque_atual,
+                "unidade": p.unidade_medida,
+                "melhor_estabelecimento": "Sem preço válido",
+                "preco_medio": 0.0,
+            })
+            continue
 
         # Encontra o mais barato
         if medias:
@@ -645,6 +660,43 @@ async def gerar_dados_lista(db: Session = Depends(database.get_db)):
     )
 
     return itens_em_falta
+
+
+@app.get("/produtos/alertas")
+async def listar_alertas(db: Session = Depends(database.get_db)):
+    """Retorna alertas de estoque baixo e produtos vencendo."""
+    hoje = datetime.date.today()
+    proxima_semana = hoje + datetime.timedelta(days=7)
+
+    estoque_baixo = (
+        db.query(models.Produto)
+        .filter(
+            models.Produto.estoque_atual < 1.0,
+            models.Produto.estoque_atual > 0,
+        )
+        .all()
+    )
+
+    vencendo = (
+        db.query(models.Produto)
+        .filter(
+            models.Produto.ultima_validade <= proxima_semana,
+            models.Produto.ultima_validade >= hoje,
+            models.Produto.estoque_atual > 0,
+        )
+        .all()
+    )
+
+    return {
+        "estoque_baixo": [
+            {"id": p.id, "nome": p.nome, "ultima_validade": p.ultima_validade}
+            for p in estoque_baixo
+        ],
+        "vencendo_em_breve": [
+            {"id": p.id, "nome": p.nome, "ultima_validade": p.ultima_validade}
+            for p in vencendo
+        ],
+    }
 
 
 @app.get("/produtos/buscar")
@@ -1210,36 +1262,6 @@ async def listar_compras_recentes(
     ]
 
 
-@app.get("/produtos/alertas")
-async def listar_alertas(db: Session = Depends(database.get_db)):
-    hoje = datetime.date.today()
-    proxima_semana = hoje + datetime.timedelta(days=7)
-
-    # 1. Produtos com estoque baixo (ex: menos de 1 unidade/kg)
-    estoque_baixo = (
-        db.query(models.Produto)
-        .filter(
-            models.Produto.estoque_atual < 1.0,
-            models.Produto.estoque_atual
-            > 0,  # Para não listar o que você já sabe que acabou
-        )
-        .all()
-    )
-
-    # 2. Produtos vencendo em breve
-    vencendo = (
-        db.query(models.Produto)
-        .filter(
-            models.Produto.ultima_validade <= proxima_semana,
-            models.Produto.ultima_validade >= hoje,
-            models.Produto.estoque_atual > 0,
-        )
-        .all()
-    )
-
-    return {"estoque_baixo": estoque_baixo, "vencendo_em_breve": vencendo}
-
-
 @app.put("/compras/{compra_id}", status_code=status.HTTP_200_OK)
 async def editar_compra(
     compra_id: int,
@@ -1365,6 +1387,7 @@ def buscar_receita(
         "pode_fazer": pode_fazer,
         "itens": [
             {
+                "id": i.id,
                 "produto_id": i.produto_id,
                 "produto_nome": i.produto.nome if i.produto else None,
                 "quantidade": i.quantidade_porcao,
