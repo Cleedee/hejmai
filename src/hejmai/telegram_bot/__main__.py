@@ -8,31 +8,29 @@ Executa:
 """
 
 import os
+
 from telegram import Update
 from telegram.ext import Application, JobQueue
 
-from hejmai.telegram_bot.handlers import criar_bot
 from hejmai.config import config
+from hejmai.telegram_bot.handlers import criar_bot
 
 
 def start():
     """Função de entrada para o script."""
     token = config.TELEGRAM_TOKEN()
-    
+
     if not token:
         print("⚠️ TELEGRAM_TOKEN não configurado. Bot não será iniciado.")
         print("Configure a variável TELEGRAM_TOKEN no .env ou docker-compose.yml")
         return
-    
+
     print("🤖 Iniciando Bot do Telegram...")
     print(f"📡 API_URL: {config.API_URL()}")
-    
+
     # Cria aplicação
     app = Application.builder().token(token).build()
-    
-    # Configura handlers
-    criar_bot(app=app)
-    
+
     print("📡 Bot em execução. Pressione Ctrl+C para parar.")
     print("")
     print("📋 Comandos disponíveis:")
@@ -44,7 +42,10 @@ def start():
     print("   /lista_compras - Gera lista de compras")
     print("   /pergunta - Pergunte à IA")
     print("")
-    
+
+    # Configura handlers
+    criar_bot(app=app)
+
     # Inicia polling
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
