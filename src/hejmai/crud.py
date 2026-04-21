@@ -332,6 +332,28 @@ def get_receita_por_id(db: Session, receita_id: int) -> Optional[models.Receita]
     return db.query(models.Receita).filter(models.Receita.id == receita_id).first()
 
 
+def get_receita_por_nome(db: Session, nome: str) -> Optional[models.Receita]:
+    """Busca uma receita pelo nome."""
+    return db.query(models.Receita).filter(models.Receita.nome == nome).first()
+
+
+def get_receitas_por_nome(db: Session, nome: str) -> List[models.Receita]:
+    """Busca receitas pelo nome."""
+    return db.query(models.Receita).filter(models.Receita.nome.ilike(f"%{nome}%")).all()
+
+
+def get_receitas_por_ingrediente(db: Session, ingrediente: str) -> List[models.Receita]:
+    """Busca receitas que contêm um ingrediente específico."""
+    produto = get_produto_por_nome(db, ingrediente)
+    if not produto:
+        return []
+    return (
+        db.query(models.Receita)
+        .filter(models.Receita.itens.any(models.ItemReceita.produto_id == produto.id))
+        .all()
+    )
+
+
 def criar_receita(
     db: Session, receita_data: dict, itens_data: List[dict]
 ) -> tuple[models.Receita, List[dict]]:
@@ -355,10 +377,12 @@ def criar_receita(
         observacao = item_data.get("observacao", "")
 
         if produto_id is None or produto_id == 0:
-            pendentes.append({
-                "observacao": observacao,
-                "quantidade": item_data.get("quantidade_porcao"),
-            })
+            pendentes.append(
+                {
+                    "observacao": observacao,
+                    "quantidade": item_data.get("quantidade_porcao"),
+                }
+            )
             item_data["produto_id"] = 0
 
         item = models.ItemReceita(receita_id=receita.id, **item_data)
@@ -378,11 +402,13 @@ def receita_ingredientes_pendentes(db: Session, receita_id: int) -> List[dict]:
     pendentes = []
     for item in receita.itens:
         if item.produto_id == 0 or item.produto_id is None:
-            pendentes.append({
-                "item_id": item.id,
-                "observacao": item.observacao,
-                "quantidade_porcao": item.quantidade_porcao,
-            })
+            pendentes.append(
+                {
+                    "item_id": item.id,
+                    "observacao": item.observacao,
+                    "quantidade_porcao": item.quantidade_porcao,
+                }
+            )
     return pendentes
 
 
@@ -415,31 +441,32 @@ def deletar_receita(db: Session, receita_id: int) -> bool:
 
 
 def atualizar_item_receita(
-    db: Session, item_id: int, produto_id: int = None, 
-    quantidade_porcao: float = None, observacao: str = None
+    db: Session,
+    item_id: int,
+    produto_id: int = None,
+    quantidade_porcao: float = None,
+    observacao: str = None,
 ) -> Optional[models.ItemReceita]:
     """Atualiza um item de receita (ingrediente)."""
-    item = db.query(models.ItemReceita).filter(
-        models.ItemReceita.id == item_id
-    ).first()
-    
+    item = db.query(models.ItemReceita).filter(models.ItemReceita.id == item_id).first()
+
     if not item:
         return None
-    
+
     if produto_id is not None:
-        produto = db.query(models.Produto).filter(
-            models.Produto.id == produto_id
-        ).first()
+        produto = (
+            db.query(models.Produto).filter(models.Produto.id == produto_id).first()
+        )
         if not produto:
             raise ValueError(f"Produto {produto_id} não encontrado")
         item.produto_id = produto_id
-    
+
     if quantidade_porcao is not None:
         item.quantidade_porcao = quantidade_porcao
-    
+
     if observacao is not None:
         item.observacao = observacao
-    
+
     db.commit()
     db.refresh(item)
     return item
@@ -447,13 +474,11 @@ def atualizar_item_receita(
 
 def remover_item_receita(db: Session, item_id: int) -> bool:
     """Remove um item de receita."""
-    item = db.query(models.ItemReceita).filter(
-        models.ItemReceita.id == item_id
-    ).first()
-    
+    item = db.query(models.ItemReceita).filter(models.ItemReceita.id == item_id).first()
+
     if not item:
         return False
-    
+
     db.delete(item)
     db.commit()
     return True

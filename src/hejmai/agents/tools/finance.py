@@ -15,7 +15,7 @@ def verificar_gastos(categoria: str = None) -> str:
     """Check recent expenses, optionally filtered by category."""
     db = SessionLocal()
     try:
-        compras = crud.get_compras_recentes(db, limite=5)
+        compras = crud.get_compras_recentes(db, limite=3)
         if not compras:
             return "📭 Nenhuma compra recente registrada."
 

@@ -1,18 +1,18 @@
 import asyncio
 import datetime
-from typing import List, Dict
 import os
-import httpx
 from difflib import SequenceMatcher
+from typing import Dict, List
 
-from fastapi import Body, FastAPI, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+import httpx
+from fastapi import Body, Depends, FastAPI, HTTPException, Query, status
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
-from hejmai import models, schemas, database, nlp, crud
-from hejmai.validator import SanityChecker
+from hejmai import crud, database, models, nlp, schemas
 from hejmai.analista_ia import AnalistaEstoque
 from hejmai.config import config
+from hejmai.validator import SanityChecker
 
 # Cria as tabelas no SQLite ao iniciar
 models.Base.metadata.create_all(bind=database.engine)
@@ -28,15 +28,20 @@ analista_ia = AnalistaEstoque(model=config.MODEL())
 def read_root():
     return {"status": "Agente Online", "ano": 2026}
 
+
 @app.post("/ia/perguntar")
-async def processar_pergunta_ia(payload: schemas.PerguntaIA, db: Session = Depends(database.get_db)):
+async def processar_pergunta_ia(
+    payload: schemas.PerguntaIA, db: Session = Depends(database.get_db)
+):
     """
     Recebe uma pergunta em linguagem natural, converte para SQL,
     executa no SQLite e retorna a interpretação da IA.
     """
     try:
         # 1. O Analista faz a mágica (SQL -> Execução -> Resposta)
-        resposta, query_gerada = await analista_ia.responder_pergunta(payload.pergunta, db)
+        resposta, query_gerada = await analista_ia.responder_pergunta(
+            payload.pergunta, db
+        )
 
         # Log para debug no terminal do container
         print(f"🤖 Pergunta: {payload.pergunta}")
@@ -45,12 +50,11 @@ async def processar_pergunta_ia(payload: schemas.PerguntaIA, db: Session = Depen
         return {
             "status": "sucesso",
             "resposta": resposta,
-            "query": query_gerada  # Enviamos de volta para o Bot mostrar se for modo debug
+            "query": query_gerada,  # Enviamos de volta para o Bot mostrar se for modo debug
         }
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Erro interno no processamento da IA: {str(e)}"
+            status_code=500, detail=f"Erro interno no processamento da IA: {str(e)}"
         )
 
 
@@ -62,19 +66,18 @@ async def agente_hejmai(payload: schemas.PerguntaIA):
     """
     try:
         from hejmai.agents.coordinator import get_coordinator_agent
-        
-        agent = get_coordinator_agent()
-        resposta = await asyncio.to_thread(agent.run, payload.pergunta)
-        
+
+        team = get_coordinator_agent()
+        resposta = await asyncio.to_thread(team.run, payload.pergunta)
+
         return {
             "status": "sucesso",
-            "resposta": resposta.content if hasattr(resposta, 'content') else str(resposta),
+            "resposta": resposta.content
+            if hasattr(resposta, "content")
+            else str(resposta),
         }
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro no agente: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Erro no agente: {str(e)}")
 
 
 @app.get("/estoque/resumo-geral")
@@ -112,16 +115,22 @@ async def performance_budget(db: Session = Depends(database.get_db)):
     ano_atual = datetime.datetime.now().year
 
     limites = (
-        db.query(models.Budget).filter(
+        db.query(models.Budget)
+        .filter(
             models.Budget.mes_referencia == mes_atual,
-            models.Budget.ano_referencia == ano_atual
-        ).all()
+            models.Budget.ano_referencia == ano_atual,
+        )
+        .all()
     )
 
     performance = []
     for lim in limites:
         gasto_real = (
-            db.query(func.sum(models.ItemCompra.preco_unitario * models.ItemCompra.quantidade))
+            db.query(
+                func.sum(
+                    models.ItemCompra.preco_unitario * models.ItemCompra.quantidade
+                )
+            )
             .join(models.Compra)
             .join(models.Produto)
             .filter(
@@ -134,12 +143,16 @@ async def performance_budget(db: Session = Depends(database.get_db)):
             or 0.0
         )
 
-        performance.append({
-            "categoria": lim.categoria,
-            "limite": lim.valor_limite,
-            "real": gasto_real,
-            "porcentagem": (gasto_real / lim.valor_limite) * 100 if lim.valor_limite > 0 else 0,
-        })
+        performance.append(
+            {
+                "categoria": lim.categoria,
+                "limite": lim.valor_limite,
+                "real": gasto_real,
+                "porcentagem": (gasto_real / lim.valor_limite) * 100
+                if lim.valor_limite > 0
+                else 0,
+            }
+        )
 
     return performance
 
@@ -151,10 +164,12 @@ async def listar_budgets(db: Session = Depends(database.get_db)):
     ano_atual = datetime.datetime.now().year
 
     budgets = (
-        db.query(models.Budget).filter(
+        db.query(models.Budget)
+        .filter(
             models.Budget.mes_referencia == mes_atual,
-            models.Budget.ano_referencia == ano_atual
-        ).all()
+            models.Budget.ano_referencia == ano_atual,
+        )
+        .all()
     )
 
     return [
@@ -171,19 +186,21 @@ async def listar_budgets(db: Session = Depends(database.get_db)):
 
 @app.post("/budgets", status_code=status.HTTP_201_CREATED)
 async def criar_budget(
-    categoria: str,
-    valor_limite: float,
-    db: Session = Depends(database.get_db)
+    categoria: str, valor_limite: float, db: Session = Depends(database.get_db)
 ):
     """Cria ou atualiza um budget para categoria no mês atual."""
     mes_atual = datetime.datetime.now().month
     ano_atual = datetime.datetime.now().year
 
-    existente = db.query(models.Budget).filter(
-        models.Budget.categoria == categoria,
-        models.Budget.mes_referencia == mes_atual,
-        models.Budget.ano_referencia == ano_atual
-    ).first()
+    existente = (
+        db.query(models.Budget)
+        .filter(
+            models.Budget.categoria == categoria,
+            models.Budget.mes_referencia == mes_atual,
+            models.Budget.ano_referencia == ano_atual,
+        )
+        .first()
+    )
 
     if existente:
         existente.valor_limite = valor_limite
@@ -194,7 +211,7 @@ async def criar_budget(
         categoria=categoria,
         valor_limite=valor_limite,
         mes_referencia=mes_atual,
-        ano_referencia=ano_atual
+        ano_referencia=ano_atual,
     )
     db.add(budget)
     db.commit()
@@ -225,29 +242,29 @@ async def encontrar_produtos_similares(
         default=0.6,
         ge=0.0,
         le=1.0,
-        description="Limiar de similaridade (0.0 a 1.0). Valores mais altos retornam apenas produtos muito similares."
+        description="Limiar de similaridade (0.0 a 1.0). Valores mais altos retornam apenas produtos muito similares.",
     ),
-    db: Session = Depends(database.get_db)
+    db: Session = Depends(database.get_db),
 ):
     """
     Encontra grupos de produtos com nomes similares para possível unificação.
-    
+
     Usa SequenceMatcher para calcular similaridade entre nomes de produtos.
     Retorna grupos de produtos que têm similaridade acima do limiar configurado.
     """
     produtos = db.query(models.Produto).all()
-    
+
     if not produtos:
         return {"grupos": []}
-    
+
     # Lista de produtos já processados
     processados = set()
     grupos_similares = []
-    
+
     for i, produto_a in enumerate(produtos):
         if produto_a.id in processados:
             continue
-            
+
         grupo = {
             "produto_base": {
                 "id": produto_a.id,
@@ -255,38 +272,38 @@ async def encontrar_produtos_similares(
                 "categoria": produto_a.categoria,
                 "estoque_atual": produto_a.estoque_atual,
             },
-            "similares": []
+            "similares": [],
         }
-        
+
         for j, produto_b in enumerate(produtos):
             if i >= j:  # Pula o próprio e já comparados
                 continue
-                
+
             if produto_b.id in processados:
                 continue
-            
+
             # Calcula similaridade entre os nomes (case-insensitive)
             similaridade = SequenceMatcher(
-                None, 
-                produto_a.nome.lower(), 
-                produto_b.nome.lower()
+                None, produto_a.nome.lower(), produto_b.nome.lower()
             ).ratio()
-            
+
             if similaridade >= limite_similaridade:
-                grupo["similares"].append({
-                    "id": produto_b.id,
-                    "nome": produto_b.nome,
-                    "categoria": produto_b.categoria,
-                    "estoque_atual": produto_b.estoque_atual,
-                    "similaridade": round(similaridade, 2)
-                })
+                grupo["similares"].append(
+                    {
+                        "id": produto_b.id,
+                        "nome": produto_b.nome,
+                        "categoria": produto_b.categoria,
+                        "estoque_atual": produto_b.estoque_atual,
+                        "similaridade": round(similaridade, 2),
+                    }
+                )
                 processados.add(produto_b.id)
-        
+
         # Adiciona o grupo apenas se houver similares
         if grupo["similares"]:
             grupos_similares.append(grupo)
             processados.add(produto_a.id)
-    
+
     return {"grupos": grupos_similares}
 
 
@@ -323,15 +340,17 @@ async def gerar_lista_detalhada(db: Session = Depends(database.get_db)):
 
         if not historico:
             # Sem histórico - usa preço zero e sem estabelecimento definido
-            produtos_analise.append({
-                "nome": p.nome,
-                "categoria": p.categoria,
-                "preco_referencia": 0.0,
-                "estoque": p.estoque_atual,
-                "unidade": p.unidade_medida,
-                "melhor_estabelecimento": "Sem histórico",
-                "preco_medio": 0.0,
-            })
+            produtos_analise.append(
+                {
+                    "nome": p.nome,
+                    "categoria": p.categoria,
+                    "preco_referencia": 0.0,
+                    "estoque": p.estoque_atual,
+                    "unidade": p.unidade_medida,
+                    "melhor_estabelecimento": "Sem histórico",
+                    "preco_medio": 0.0,
+                }
+            )
             continue
 
         # Calcula preço médio por estabelecimento (ignora preços zero)
@@ -352,15 +371,17 @@ async def gerar_lista_detalhada(db: Session = Depends(database.get_db)):
 
         # Se todos os preços eram zero, marca como sem histórico válido
         if not medias:
-            produtos_analise.append({
-                "nome": p.nome,
-                "categoria": p.categoria,
-                "preco_referencia": 0.0,
-                "estoque": p.estoque_atual,
-                "unidade": p.unidade_medida,
-                "melhor_estabelecimento": "Sem preço válido",
-                "preco_medio": 0.0,
-            })
+            produtos_analise.append(
+                {
+                    "nome": p.nome,
+                    "categoria": p.categoria,
+                    "preco_referencia": 0.0,
+                    "estoque": p.estoque_atual,
+                    "unidade": p.unidade_medida,
+                    "melhor_estabelecimento": "Sem preço válido",
+                    "preco_medio": 0.0,
+                }
+            )
             continue
 
         # Encontra o mais barato
@@ -379,20 +400,26 @@ async def gerar_lista_detalhada(db: Session = Depends(database.get_db)):
             # Se diferença irrelevante, agrupa no local com mais produtos
             if diff_percentual < 5:
                 # Conta compras por local
-                contagem = {local: len(precos) for local, precos in precos_por_local.items()}
+                contagem = {
+                    local: len(precos) for local, precos in precos_por_local.items()
+                }
                 melhor_local = max(contagem, key=contagem.get)
                 preco_medio = sum(medias.values()) / len(medias)
 
-            produtos_analise.append({
-                "nome": p.nome,
-                "categoria": p.categoria,
-                "preco_referencia": round(preco_medio, 2),
-                "estoque": p.estoque_atual,
-                "unidade": p.unidade_medida,
-                "melhor_estabelecimento": melhor_local,
-                "preco_medio": round(preco_medio, 2),
-                "diferenca_percentual": round(diff_percentual, 1) if diff_percentual >= 5 else 0,
-            })
+            produtos_analise.append(
+                {
+                    "nome": p.nome,
+                    "categoria": p.categoria,
+                    "preco_referencia": round(preco_medio, 2),
+                    "estoque": p.estoque_atual,
+                    "unidade": p.unidade_medida,
+                    "melhor_estabelecimento": melhor_local,
+                    "preco_medio": round(preco_medio, 2),
+                    "diferenca_percentual": round(diff_percentual, 1)
+                    if diff_percentual >= 5
+                    else 0,
+                }
+            )
 
     # Agrupa por estabelecimento
     por_estabelecimento = {}
@@ -468,7 +495,11 @@ async def analisar_precos(produto_id: int, db: Session = Depends(database.get_db
         return {"insight": f"Não há histórico de preços para {produto.nome}."}
 
     dados_precos = [
-        {"data": item.compra.data_compra.strftime("%d/%m/%Y"), "preco": item.preco_unitario, "local": item.compra.local_compra}
+        {
+            "data": item.compra.data_compra.strftime("%d/%m/%Y"),
+            "preco": item.preco_unitario,
+            "local": item.compra.local_compra,
+        }
         for item in historico
     ]
 
@@ -493,7 +524,7 @@ Responda em português de forma direta e útil. Inclua:
 3. Se vale a pena comprar agora ou esperar
 
 Máximo 3 frases."""
-    
+
     try:
         async with httpx.AsyncClient(timeout=90.0) as client:
             response = await client.post(
@@ -504,7 +535,7 @@ Máximo 3 frases."""
                     "stream": False,
                 },
             )
-            
+
             if response.status_code == 200:
                 resultado = response.json()
                 insight = resultado.get("response", "").strip()
@@ -622,7 +653,8 @@ async def sugerir_receita(db: Session = Depends(database.get_db)):
     vencendo = (
         db.query(models.Produto)
         .filter(
-            models.Produto.ultima_validade <= datetime.date.today() + datetime.timedelta(days=7),
+            models.Produto.ultima_validade
+            <= datetime.date.today() + datetime.timedelta(days=7),
             models.Produto.ultima_validade >= datetime.date.today(),
             models.Produto.estoque_atual > 0,
         )
@@ -637,8 +669,7 @@ Sugira UMA receita rápida que use esses itens. Máximo 3 passos."""
 
         try:
             response = await processador_receitas.client.chat(
-                model=config.MODEL(),
-                messages=[{"role": "user", "content": prompt}]
+                model=config.MODEL(), messages=[{"role": "user", "content": prompt}]
             )
             resposta["sugestao_ia"] = response["message"]["content"]
             resposta["itens_vencendo"] = [p.nome for p in vencendo]
@@ -702,19 +733,21 @@ async def listar_alertas(db: Session = Depends(database.get_db)):
 @app.get("/produtos/buscar")
 async def buscar_produtos(
     termo: str = Query(..., min_length=1, description="Termo de busca por nome"),
-    com_estoque: bool = Query(default=True, description="Filtrar apenas produtos com estoque"),
-    db: Session = Depends(database.get_db)
+    com_estoque: bool = Query(
+        default=True, description="Filtrar apenas produtos com estoque"
+    ),
+    db: Session = Depends(database.get_db),
 ):
     """
     Busca produtos por nome usando busca híbrida (ilike + fuzzy matching).
-    
+
     Útil para encontrar produtos mesmo com erros de digitação ou variações
     (ex: 'pão' encontra 'Pães', 'arros' encontra 'Arroz').
     """
     from hejmai import crud
-    
+
     produtos = crud.buscar_produtos_similares(db, termo, com_estoque=com_estoque)
-    
+
     return [
         {
             "id": p.id,
@@ -746,9 +779,7 @@ async def consumir_produto(
     produto.estoque_atual -= quantidade
 
     nova_mov = models.Movimentacao(
-        produto_id=produto_id,
-        quantidade=-quantidade,
-        tipo="CONSUMO"
+        produto_id=produto_id, quantidade=-quantidade, tipo="CONSUMO"
     )
 
     db.add(nova_mov)
@@ -768,7 +799,7 @@ async def registrar_perda(
 ):
     """
     Registra perda/desperdício de um produto.
-    
+
     Diferente do consumo, cria movimentação do tipo 'PERDA' para auditoria.
     """
     produto = db.query(models.Produto).filter(models.Produto.id == produto_id).first()
@@ -785,9 +816,7 @@ async def registrar_perda(
     produto.estoque_atual -= quantidade
 
     nova_mov = models.Movimentacao(
-        produto_id=produto_id,
-        quantidade=-quantidade,
-        tipo="PERDA"
+        produto_id=produto_id, quantidade=-quantidade, tipo="PERDA"
     )
 
     db.add(nova_mov)
@@ -846,95 +875,102 @@ async def detalhes_produto(
 
 @app.post("/produtos/unificar")
 async def unificar_produtos(
-    unificacao: schemas.UnificacaoProdutos,
-    db: Session = Depends(database.get_db)
+    unificacao: schemas.UnificacaoProdutos, db: Session = Depends(database.get_db)
 ):
     """
     Unifica múltiplos produtos em um único produto principal.
-    
+
     - Soma os estoques de todos os produtos no produto principal
     - Atualiza a validade para a mais recente entre todos
     - Transfere o histórico de compras (itens_compra) para o produto principal
     - Remove os produtos unificados do banco
-    
+
     Útil para consolidar produtos duplicados com nomes ligeiramente diferentes.
     """
     produto_principal_id = unificacao.produto_principal_id
     produtos_para_unificar_ids = unificacao.produtos_para_unificar
-    
+
     # Validações iniciais
     if not produtos_para_unificar_ids:
         raise HTTPException(
-            status_code=400, 
-            detail="Nenhum produto foi especificado para unificação"
+            status_code=400, detail="Nenhum produto foi especificado para unificação"
         )
-    
+
     if produto_principal_id in produtos_para_unificar_ids:
         raise HTTPException(
             status_code=400,
-            detail="O produto principal não pode estar na lista de produtos para unificar"
+            detail="O produto principal não pode estar na lista de produtos para unificar",
         )
-    
+
     # Busca o produto principal
-    produto_principal = db.query(models.Produto).filter(
-        models.Produto.id == produto_principal_id
-    ).first()
-    
+    produto_principal = (
+        db.query(models.Produto)
+        .filter(models.Produto.id == produto_principal_id)
+        .first()
+    )
+
     if not produto_principal:
         raise HTTPException(
             status_code=404,
-            detail=f"Produto principal (ID {produto_principal_id}) não encontrado"
+            detail=f"Produto principal (ID {produto_principal_id}) não encontrado",
         )
-    
+
     # Busca todos os produtos que serão unificados
     produtos_secundarios = (
         db.query(models.Produto)
         .filter(models.Produto.id.in_(produtos_para_unificar_ids))
         .all()
     )
-    
+
     if len(produtos_secundarios) != len(produtos_para_unificar_ids):
         raise HTTPException(
             status_code=404,
-            detail="Um ou mais produtos para unificar não foram encontrados"
+            detail="Um ou mais produtos para unificar não foram encontrados",
         )
-    
+
     try:
         estoque_total = produto_principal.estoque_atual or 0.0
         validade_mais_recente = produto_principal.ultima_validade
-        
+
         for produto_sec in produtos_secundarios:
             # 1. Somar estoques
             estoque_total += produto_sec.estoque_atual or 0.0
-            
+
             # 2. Manter a validade mais recente
             if produto_sec.ultima_validade:
-                if not validade_mais_recente or produto_sec.ultima_validade > validade_mais_recente:
+                if (
+                    not validade_mais_recente
+                    or produto_sec.ultima_validade > validade_mais_recente
+                ):
                     validade_mais_recente = produto_sec.ultima_validade
-            
+
             # 3. Transferir histórico de compras (ItemCompra)
-            itens_compra = db.query(models.ItemCompra).filter(
-                models.ItemCompra.produto_id == produto_sec.id
-            ).all()
-            
+            itens_compra = (
+                db.query(models.ItemCompra)
+                .filter(models.ItemCompra.produto_id == produto_sec.id)
+                .all()
+            )
+
             for item in itens_compra:
                 item.produto_id = produto_principal_id
-            
+
             # 4. Transferir movimentações
-            movimentacoes = db.query(models.Movimentacao).filter(
-                models.Movimentacao.produto_id == produto_sec.id
-            ).all()
-            
+            movimentacoes = (
+                db.query(models.Movimentacao)
+                .filter(models.Movimentacao.produto_id == produto_sec.id)
+                .all()
+            )
+
             for mov in movimentacoes:
                 mov.produto_id = produto_principal_id
-            
+
             # 5. Remover produto secundário
             db.delete(produto_sec)
-        
+
         # Atualiza produto principal com estoque consolidado e validade
         produto_principal.estoque_atual = estoque_total
         produto_principal.ultima_validade = validade_mais_recente
-        
+
         # Cria registro de movimentação para auditoria
         total_unificado = sum(p.estoque_atual or 0.0 for p in produtos_secundarios)
         if total_unificado > 0:
@@ -944,21 +980,20 @@ async def unificar_produtos(
                 tipo="UNIFICACAO",
             )
             db.add(mov_unificacao)
-        
+
         db.commit()
-        
+
         return {
             "status": "sucesso",
             "mensagem": f"{len(produtos_secundarios)} produtos unificados em '{produto_principal.nome}'",
             "estoque_consolidado": estoque_total,
             "produtos_removidos": len(produtos_secundarios),
         }
-        
+
     except Exception as e:
         db.rollback()
         raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao unificar produtos: {str(e)}"
+            status_code=500, detail=f"Erro ao unificar produtos: {str(e)}"
         )
 
 
@@ -1028,10 +1063,7 @@ async def registrar_compra_lote(
 
 
 @app.delete("/compras/{compra_id}", status_code=status.HTTP_200_OK)
-async def excluir_compra(
-    compra_id: int,
-    db: Session = Depends(database.get_db)
-):
+async def excluir_compra(compra_id: int, db: Session = Depends(database.get_db)):
     """
     Faz exclusão lógica de uma compra registrada e reverte o estoque dos produtos afetados.
 
@@ -1043,15 +1075,16 @@ async def excluir_compra(
     A compra não aparece mais nas consultas, mas permanece no banco para auditoria.
     """
     # Busca a compra (apenas se não estiver já excluída)
-    compra = db.query(models.Compra).filter(
-        models.Compra.id == compra_id,
-        models.Compra.excluida == 0
-    ).first()
+    compra = (
+        db.query(models.Compra)
+        .filter(models.Compra.id == compra_id, models.Compra.excluida == 0)
+        .first()
+    )
 
     if not compra:
         raise HTTPException(
             status_code=404,
-            detail=f"Compra (ID {compra_id}) não encontrada ou já está excluída"
+            detail=f"Compra (ID {compra_id}) não encontrada ou já está excluída",
         )
 
     try:
@@ -1066,19 +1099,23 @@ async def excluir_compra(
 
         for item in itens_compra:
             # Busca o produto
-            produto = db.query(models.Produto).filter(
-                models.Produto.id == item.produto_id
-            ).first()
+            produto = (
+                db.query(models.Produto)
+                .filter(models.Produto.id == item.produto_id)
+                .first()
+            )
 
             if produto:
                 # Reverte o estoque (subtrai a quantidade que foi adicionada)
                 produto.estoque_atual = max(0, produto.estoque_atual - item.quantidade)
-                produtos_afetados.append({
-                    "nome": produto.nome,
-                    "quantidade_removida": item.quantidade,
-                    "estoque_anterior": produto.estoque_atual + item.quantidade,
-                    "estoque_atual": produto.estoque_atual,
-                })
+                produtos_afetados.append(
+                    {
+                        "nome": produto.nome,
+                        "quantidade_removida": item.quantidade,
+                        "estoque_anterior": produto.estoque_atual + item.quantidade,
+                        "estoque_atual": produto.estoque_atual,
+                    }
+                )
 
         # Faz exclusão lógica da compra
         compra.excluida = 1
@@ -1112,17 +1149,11 @@ async def excluir_compra(
 
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao excluir compra: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Erro ao excluir compra: {str(e)}")
 
 
 @app.patch("/compras/{compra_id}/restaurar", status_code=status.HTTP_200_OK)
-async def restaurar_compra(
-    compra_id: int,
-    db: Session = Depends(database.get_db)
-):
+async def restaurar_compra(compra_id: int, db: Session = Depends(database.get_db)):
     """
     Restaura uma compra que foi excluída logicamente.
 
@@ -1133,15 +1164,16 @@ async def restaurar_compra(
     Útil para desfazer exclusões acidentais.
     """
     # Busca a compra excluída
-    compra = db.query(models.Compra).filter(
-        models.Compra.id == compra_id,
-        models.Compra.excluida == 1
-    ).first()
+    compra = (
+        db.query(models.Compra)
+        .filter(models.Compra.id == compra_id, models.Compra.excluida == 1)
+        .first()
+    )
 
     if not compra:
         raise HTTPException(
             status_code=404,
-            detail=f"Compra (ID {compra_id}) não encontrada ou não está excluída"
+            detail=f"Compra (ID {compra_id}) não encontrada ou não está excluída",
         )
 
     try:
@@ -1155,19 +1187,23 @@ async def restaurar_compra(
         produtos_afetados = []
 
         for item in itens_compra:
-            produto = db.query(models.Produto).filter(
-                models.Produto.id == item.produto_id
-            ).first()
+            produto = (
+                db.query(models.Produto)
+                .filter(models.Produto.id == item.produto_id)
+                .first()
+            )
 
             if produto:
                 estoque_anterior = produto.estoque_atual
                 produto.estoque_atual += item.quantidade
-                produtos_afetados.append({
-                    "nome": produto.nome,
-                    "quantidade_adicionada": item.quantidade,
-                    "estoque_anterior": estoque_anterior,
-                    "estoque_atual": produto.estoque_atual,
-                })
+                produtos_afetados.append(
+                    {
+                        "nome": produto.nome,
+                        "quantidade_adicionada": item.quantidade,
+                        "estoque_anterior": estoque_anterior,
+                        "estoque_atual": produto.estoque_atual,
+                    }
+                )
 
         # Restaura a compra
         compra.excluida = 0
@@ -1201,8 +1237,7 @@ async def restaurar_compra(
     except Exception as e:
         db.rollback()
         raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao restaurar compra: {str(e)}"
+            status_code=500, detail=f"Erro ao restaurar compra: {str(e)}"
         )
 
 
@@ -1234,12 +1269,14 @@ async def listar_compras_excluidas(db: Session = Depends(database.get_db)):
 
 @app.get("/compras/recentes")
 async def listar_compras_recentes(
-    limite: int = Query(default=5, ge=1, le=20, description="Número de compras a retornar (1-20)"),
-    db: Session = Depends(database.get_db)
+    limite: int = Query(
+        default=5, ge=1, le=20, description="Número de compras a retornar (1-20)"
+    ),
+    db: Session = Depends(database.get_db),
 ):
     """
     Lista as últimas compras realizadas (não excluídas).
-    
+
     Retorna local, data e valor total de cada compra.
     """
     compras = (
@@ -1264,41 +1301,37 @@ async def listar_compras_recentes(
 
 @app.put("/compras/{compra_id}", status_code=status.HTTP_200_OK)
 async def editar_compra(
-    compra_id: int,
-    update: schemas.CompraUpdate,
-    db: Session = Depends(database.get_db)
+    compra_id: int, update: schemas.CompraUpdate, db: Session = Depends(database.get_db)
 ):
     """
     Edita uma compra existente.
-    
+
     Permite alterar o local de compra e/ou a data da compra.
     Não altera os itens da compra - para isso, exclua e registre novamente.
     """
     compra = db.query(models.Compra).filter(models.Compra.id == compra_id).first()
-    
+
     if not compra:
         raise HTTPException(
-            status_code=404,
-            detail=f"Compra (ID {compra_id}) não encontrada"
+            status_code=404, detail=f"Compra (ID {compra_id}) não encontrada"
         )
-    
+
     try:
         # Obtém os campos enviados (apenas os não-None)
         dados = update.model_dump(exclude_unset=True)
-        
+
         if not dados:
             raise HTTPException(
-                status_code=400,
-                detail="Nenhum dado fornecido para atualização"
+                status_code=400, detail="Nenhum dado fornecido para atualização"
             )
-        
+
         # Aplica as atualizações
         for campo, valor in dados.items():
             setattr(compra, campo, valor)
-        
+
         db.commit()
         db.refresh(compra)
-        
+
         return {
             "status": "sucesso",
             "mensagem": f"Compra {compra_id} atualizada com sucesso",
@@ -1307,16 +1340,15 @@ async def editar_compra(
                 "local_compra": compra.local_compra,
                 "data_compra": compra.data_compra,
                 "valor_total_nota": compra.valor_total_nota,
-            }
+            },
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao atualizar compra: {str(e)}"
+            status_code=500, detail=f"Erro ao atualizar compra: {str(e)}"
         )
 
 
@@ -1326,10 +1358,7 @@ async def editar_compra(
 
 
 @app.get("/receitas", response_model=List[dict])
-def listar_receitas(
-    ativas: bool = True,
-    db: Session = Depends(database.get_db)
-):
+def listar_receitas(ativas: bool = True, db: Session = Depends(database.get_db)):
     """Lista todas as receitas."""
     receitas = crud.get_todas_receitas(db, ativas=ativas)
     return [
@@ -1357,18 +1386,13 @@ def listar_receitas(
 
 
 @app.get("/receitas/sugerir")
-def sugerir_receitas_endpoint(
-    db: Session = Depends(database.get_db)
-):
+def sugerir_receitas_endpoint(db: Session = Depends(database.get_db)):
     """Sugere receitas baseadas no estoque atual."""
     return crud.sugerir_receitas(db)
 
 
 @app.get("/receitas/{receita_id}", response_model=dict)
-def buscar_receita(
-    receita_id: int,
-    db: Session = Depends(database.get_db)
-):
+def buscar_receita(receita_id: int, db: Session = Depends(database.get_db)):
     """Busca uma receita pelo ID com verificação de estoque."""
     receita = crud.get_receita_por_id(db, receita_id)
     if not receita:
@@ -1402,20 +1426,18 @@ def buscar_receita(
 
 @app.post("/receitas", status_code=status.HTTP_201_CREATED)
 def criar_receita_endpoint(
-    receita: schemas.ReceitaCreate,
-    db: Session = Depends(database.get_db)
+    receita: schemas.ReceitaCreate, db: Session = Depends(database.get_db)
 ):
     """Cria uma nova receita com seus itens.
-    
+
     Ingredientes sem produto_id são marcados como pendentes.
     """
-    existente = db.query(models.Receita).filter(
-        models.Receita.nome == receita.nome
-    ).first()
+    existente = (
+        db.query(models.Receita).filter(models.Receita.nome == receita.nome).first()
+    )
     if existente:
         raise HTTPException(
-            status_code=400,
-            detail=f"Já existe uma receita com o nome '{receita.nome}'"
+            status_code=400, detail=f"Já existe uma receita com o nome '{receita.nome}'"
         )
 
     receita_data = {
@@ -1437,18 +1459,18 @@ def criar_receita_endpoint(
 
     try:
         nova, pendentes = crud.criar_receita(db, receita_data, itens_data)
-        
+
         response = {
             "status": "sucesso",
             "mensagem": f"Receita '{nova.nome}' criada",
             "id": nova.id,
             "total_itens": len(itens_data),
         }
-        
+
         if pendentes:
             response["pendentes"] = pendentes
             response["mensagem"] += f" ({len(pendentes)} ingredientes pendentes)"
-        
+
         return response
     except Exception as e:
         db.rollback()
@@ -1459,7 +1481,7 @@ def criar_receita_endpoint(
 def atualizar_receita_endpoint(
     receita_id: int,
     receita: schemas.ReceitaUpdate,
-    db: Session = Depends(database.get_db)
+    db: Session = Depends(database.get_db),
 ):
     """Atualiza dados de uma receita."""
     existente = crud.get_receita_por_id(db, receita_id)
@@ -1482,10 +1504,7 @@ def atualizar_receita_endpoint(
 
 
 @app.delete("/receitas/{receita_id}", status_code=status.HTTP_200_OK)
-def deletar_receita_endpoint(
-    receita_id: int,
-    db: Session = Depends(database.get_db)
-):
+def deletar_receita_endpoint(receita_id: int, db: Session = Depends(database.get_db)):
     """Soft delete - desativa a receita."""
     if not crud.deletar_receita(db, receita_id):
         raise HTTPException(status_code=404, detail="Receita não encontrada")
@@ -1500,17 +1519,17 @@ def atualizar_item_receita_endpoint(
     produto_id: int = None,
     quantidade_porcao: float = None,
     observacao: str = None,
-    db: Session = Depends(database.get_db)
+    db: Session = Depends(database.get_db),
 ):
     """Atualiza um ingrediente de receita (produto, quantidade ou observação)."""
     receita = crud.get_receita_por_id(db, receita_id)
     if not receita:
         raise HTTPException(status_code=404, detail="Receita não encontrada")
-    
+
     item = next((i for i in receita.itens if i.id == item_id), None)
     if not item:
         raise HTTPException(status_code=404, detail="Item não encontrado")
-    
+
     try:
         atualizado = crud.atualizar_item_receita(
             db, item_id, produto_id, quantidade_porcao, observacao
@@ -1523,7 +1542,7 @@ def atualizar_item_receita_endpoint(
                 "produto_nome": atualizado.produto.nome if atualizado.produto else None,
                 "quantidade_porcao": atualizado.quantidade_porcao,
                 "observacao": atualizado.observacao,
-            }
+            },
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1534,30 +1553,25 @@ def atualizar_item_receita_endpoint(
 
 @app.delete("/receitas/{receita_id}/itens/{item_id}")
 def remover_item_receita_endpoint(
-    receita_id: int,
-    item_id: int,
-    db: Session = Depends(database.get_db)
+    receita_id: int, item_id: int, db: Session = Depends(database.get_db)
 ):
     """Remove um ingrediente de receita."""
     receita = crud.get_receita_por_id(db, receita_id)
     if not receita:
         raise HTTPException(status_code=404, detail="Receita não encontrada")
-    
+
     item = next((i for i in receita.itens if i.id == item_id), None)
     if not item:
         raise HTTPException(status_code=404, detail="Item não encontrado")
-    
+
     if not crud.remover_item_receita(db, item_id):
         raise HTTPException(status_code=500, detail="Erro ao remover item")
-    
+
     return {"status": "sucesso", "mensagem": "Item removido"}
 
 
 @app.get("/receitas/{receita_id}/pendentes")
-def receita_pendentes_endpoint(
-    receita_id: int,
-    db: Session = Depends(database.get_db)
-):
+def receita_pendentes_endpoint(receita_id: int, db: Session = Depends(database.get_db)):
     """Lista ingredientes pendentes de uma receita."""
     receita = crud.get_receita_por_id(db, receita_id)
     if not receita:

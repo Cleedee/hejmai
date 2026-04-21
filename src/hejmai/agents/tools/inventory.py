@@ -1,7 +1,7 @@
 """
 Inventory Tool para o Hejmai Agent.
 
-Fornece capacidades de consulta e modificação do estoque.
+Fornece capacidades de consulta do estoque.
 """
 
 from agno.tools import tool

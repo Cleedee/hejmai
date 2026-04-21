@@ -1,5 +1,5 @@
-import json
 import datetime
+import json
 import os
 from difflib import get_close_matches
 
@@ -34,15 +34,14 @@ class Receitas:
         ingredientes = ", ".join([p["nome"] for p in itens_vencendo])
 
         prompt = f"""
-        Você é um Chef especializado em economia doméstica. 
+        Você é um Chef especializado em economia doméstica.
         Tenho os seguintes ingredientes que VENCEM EM BREVE: {ingredientes}.
-        
+
         TAREFA:
-        1. Sugira UMA receita principal que use o máximo desses itens.
-        2. A receita deve ser nutritiva e atraente para duas crianças (7 e 10 anos).
-        3. Seja breve nos passos (máximo 5 passos).
-        4. Liste ingredientes extras simples que provavelmente tenho na despensa (sal, óleo, cebola).
-        
+        1. Sugira UMA receita que use o máximo desses itens.
+        2. Seja breve nos passos (máximo 5 passos).
+        3. Liste ingredientes extras simples que provavelmente tenho na despensa (sal, óleo, cebola).
+
         Responda em Português.
         """
 
