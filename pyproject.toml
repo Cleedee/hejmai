@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "hejmai"
-version = "0.1.0"
+version = "0.1.1"
 description = "Sistema de gestão de despensa e planejamento de refeições e economia"
 readme = "README.md"
 requires-python = ">=3.14"

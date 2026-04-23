@@ -11,6 +11,7 @@ from agno.models.ollama import Ollama
 from hejmai.agents.tools.finance import FinanceTool
 from hejmai.agents.tools.inventory import InventoryTool
 from hejmai.agents.tools.projection import ProjectionTool
+from hejmai.agents.tools.recipe import RecipeTool
 from hejmai.config import config
 
 
@@ -18,10 +19,10 @@ def get_coordinator_agent() -> Agent:
     """
     Retorna a instância do Agente Coordenador.
 
-    O coordenador tem acesso às ferramentas de Inventário, Finanças e Projeção.
+    O coordenador tem acesso às ferramentas de Inventário, Finanças, Projeção e Receitas.
     """
 
-    ferramentas = InventoryTool + FinanceTool + ProjectionTool
+    ferramentas = InventoryTool + FinanceTool + ProjectionTool + RecipeTool
 
     return Agent(
         name="Hejmai Coordinator",

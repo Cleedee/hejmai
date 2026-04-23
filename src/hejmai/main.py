@@ -689,11 +689,25 @@ async def listar_alertas(db: Session = Depends(database.get_db)):
 
     return {
         "estoque_baixo": [
-            {"id": p.id, "nome": p.nome, "ultima_validade": p.ultima_validade}
+            {
+                "id": p.id,
+                "nome": p.nome,
+                "categoria": p.categoria,
+                "estoque_atual": p.estoque_atual,
+                "unidade_medida": p.unidade_medida,
+                "ultima_validade": p.ultima_validade,
+            }
             for p in estoque_baixo
         ],
         "vencendo_em_breve": [
-            {"id": p.id, "nome": p.nome, "ultima_validade": p.ultima_validade}
+            {
+                "id": p.id,
+                "nome": p.nome,
+                "categoria": p.categoria,
+                "estoque_atual": p.estoque_atual,
+                "unidade_medida": p.unidade_medida,
+                "ultima_validade": p.ultima_validade,
+            }
             for p in vencendo
         ],
     }

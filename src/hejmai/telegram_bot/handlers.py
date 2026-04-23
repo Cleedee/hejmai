@@ -37,6 +37,7 @@ from telegram.ext import (
 )
 
 from hejmai import crud
+from hejmai.config import config
 from hejmai.database import SessionLocal
 from hejmai.vigia_estoque.analise_consumo import (
     analisar_estoque,
@@ -44,7 +45,6 @@ from hejmai.vigia_estoque.analise_consumo import (
     tem_alertas_urgentes,
 )
 from hejmai.vigia_estoque.vigia import executar_vigia
-from hejmai.config import config
 
 # =============================================================================
 # Configuração
@@ -471,7 +471,9 @@ async def gerar_lista_orcada(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """Gera lista de compras agrupada por estabelecimento mais barato."""
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{config.API_URL()}/produtos/lista-compras-detalhada")
+            response = await client.get(
+                f"{config.API_URL()}/produtos/lista-compras-detalhada"
+            )
             dados = response.json()
 
         if not dados.get("por_estabelecimento"):
@@ -509,7 +511,7 @@ async def gerar_lista_orcada(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def comando_precos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Mostra histórico de preços de um produto.
-    
+
     Uso: /precos arroz
     """
     if not context.args:
@@ -550,7 +552,7 @@ async def comando_precos(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
             historico = r.json()
-            
+
             if not historico:
                 await update.message.reply_text(
                     f"📊 *Histórico de Preços: {produto['nome']}*\n\n"
@@ -571,7 +573,9 @@ async def comando_precos(update: Update, context: ContextTypes.DEFAULT_TYPE):
             texto += f"📋 Registros:\n"
 
             for item in historico[-10:]:  # Últimos 10
-                texto += f"• {item['data'][:10]}: R$ {item['preco']:.2f} ({item['local']})\n"
+                texto += (
+                    f"• {item['data'][:10]}: R$ {item['preco']:.2f} ({item['local']})\n"
+                )
 
             await update.message.reply_text(texto, parse_mode="Markdown")
 
@@ -598,7 +602,9 @@ async def comando_budget(update: Update, context: ContextTypes.DEFAULT_TYPE):
             valor = float(args[2])
             await definir_budget_telegram(update, categoria, valor)
         except ValueError:
-            await update.message.reply_text("❌ Valor inválido.\nEx: `/budget definir Mercearia 500`")
+            await update.message.reply_text(
+                "❌ Valor inválido.\nEx: `/budget definir Mercearia 500`"
+            )
     else:
         await update.message.reply_text(
             "💡 *Comandos de budget:*\n\n"
@@ -628,6 +634,7 @@ async def ver_budget_telegram(update: Update):
             return
 
         import datetime
+
         mes_atual = datetime.datetime.now().strftime("%B/%Y").capitalize()
 
         texto = f"📊 *Budgets - {mes_atual}*\n\n"
@@ -654,7 +661,7 @@ async def definir_budget_telegram(update: Update, categoria: str, valor: float):
         async with httpx.AsyncClient() as client:
             r = await client.post(
                 f"{config.API_URL()}/budgets",
-                params={"categoria": categoria, "valor_limite": valor}
+                params={"categoria": categoria, "valor_limite": valor},
             )
 
         if r.status_code == 201:
@@ -695,7 +702,11 @@ async def comando_produto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto_completo = " ".join(context.args)
     partes = texto_completo.split("|")
     acao = partes[0].strip().split()[0].lower() if partes else ""
-    nome = " ".join(partes[0].strip().split()[1:]) if len(partes[0].strip().split()) > 1 else ""
+    nome = (
+        " ".join(partes[0].strip().split()[1:])
+        if len(partes[0].strip().split()) > 1
+        else ""
+    )
 
     if acao == "editar" and "|" in texto_completo:
         await editar_produto_telegram(update, nome, partes[1])
@@ -768,8 +779,8 @@ async def ver_produto_telegram(update: Update, nome: str):
         texto += f"📊 Estoque: {detalhes.get('estoque_atual', 0)} {detalhes.get('unidade_medida', '')}\n"
         if detalhes.get("ultima_validade"):
             texto += f"📅 Validade: {detalhes['ultima_validade']}\n"
-        
-        tags = detalhes.get('tags', [])
+
+        tags = detalhes.get("tags", [])
         if tags:
             texto += f"🏷️ Tags: {', '.join(tags)}\n"
 
@@ -792,7 +803,9 @@ async def ver_produto_telegram(update: Update, nome: str):
 async def editar_produto_telegram(update: Update, nome: str, campos_str: str):
     """Edita um produto."""
     if not nome:
-        await update.message.reply_text("❌ Informe o nome do produto.\nEx: `/produto editar Arroz | estoque:5`")
+        await update.message.reply_text(
+            "❌ Informe o nome do produto.\nEx: `/produto editar Arroz | estoque:5`"
+        )
         return
 
     try:
@@ -825,7 +838,9 @@ async def editar_produto_telegram(update: Update, nome: str, campos_str: str):
                     try:
                         campos["estoque_atual"] = float(valor)
                     except ValueError:
-                        await update.message.reply_text(f"❌ Valor inválido para estoque: {valor}")
+                        await update.message.reply_text(
+                            f"❌ Valor inválido para estoque: {valor}"
+                        )
                         return
                 elif chave == "validade":
                     campos["ultima_validade"] = valor
@@ -841,15 +856,13 @@ async def editar_produto_telegram(update: Update, nome: str, campos_str: str):
 
         async with httpx.AsyncClient() as client:
             r = await client.patch(
-                f"{config.API_URL()}/produtos/{produto_id}",
-                json=campos
+                f"{config.API_URL()}/produtos/{produto_id}", json=campos
             )
 
         if r.status_code == 200:
             campos_editados = ", ".join([f"{k}={v}" for k, v in campos.items()])
             await update.message.reply_text(
-                f"✅ *{produto['nome']}* atualizado!\n"
-                f"Alterações: {campos_editados}"
+                f"✅ *{produto['nome']}* atualizado!\nAlterações: {campos_editados}"
             )
         else:
             await update.message.reply_text(f"❌ Erro ao atualizar: {r.status_code}")
@@ -892,7 +905,7 @@ async def comando_receitas(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def comando_receita_detalhe(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Mostra detalhes de uma receita específica.
-    
+
     Uso: /receita Marmota
     """
     if not context.args:
@@ -957,10 +970,10 @@ async def comando_receita_detalhe(update: Update, context: ContextTypes.DEFAULT_
 async def comando_add_receita(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Adiciona uma nova receita.
-    
+
     Uso:
     /add_receita Nome da Receita | descrição | ingrediente1:qtd, ingrediente2:qtd | modo preparo | tags
-    
+
     Exemplo:
     /add_receita Tapioca | Tapioca simples | Farinha de tapioca:200, Sal:1 | Aqueça a frigideira... | brasileira,rapida
     """
@@ -971,15 +984,15 @@ async def comando_add_receita(update: Update, context: ContextTypes.DEFAULT_TYPE
             "📝 *Exemplo:*\n"
             "`/add_receita Tapioca | Tapioca simples | Farinha:200, Sal:1 | Aqueça a frigideira... | brasileira,rapida`\n\n"
             "📖 Use `/receitas` para ver as existentes.",
-            parse_mode="Markdown"
+            parse_mode="Markdown",
         )
         return
 
     texto_completo = " ".join(context.args)
-    
+
     # Parse do formato: Nome | Descrição | Ing1:qtd, Ing2:qtd | Modo | Tags
     partes = texto_completo.split("|")
-    
+
     if len(partes) < 3:
         await update.message.reply_text(
             "❌ Formato incorreto!\n\n"
@@ -1000,7 +1013,9 @@ async def comando_add_receita(update: Update, context: ContextTypes.DEFAULT_TYPE
         ing = ing.strip()
         if ":" in ing:
             nome_ing, qtd = ing.rsplit(":", 1)
-            ingredientes_parsed.append({"nome": nome_ing.strip(), "quantidade": float(qtd.strip())})
+            ingredientes_parsed.append(
+                {"nome": nome_ing.strip(), "quantidade": float(qtd.strip())}
+            )
         elif ing:
             ingredientes_parsed.append({"nome": ing, "quantidade": 1.0})
 
@@ -1014,7 +1029,7 @@ async def comando_add_receita(update: Update, context: ContextTypes.DEFAULT_TYPE
     async with httpx.AsyncClient() as client:
         produtos_response = await client.get(
             f"{config.API_URL()}/produtos/buscar",
-            params={"termo": "", "com_estoque": False}
+            params={"termo": "", "com_estoque": False},
         )
         todos_produtos = produtos_response.json()
 
@@ -1027,17 +1042,19 @@ async def comando_add_receita(update: Update, context: ContextTypes.DEFAULT_TYPE
         async with httpx.AsyncClient() as client:
             r = await client.get(
                 f"{config.API_URL()}/produtos/buscar",
-                params={"termo": termo, "com_estoque": False}
+                params={"termo": termo, "com_estoque": False},
             )
             resultados = r.json()
 
         if resultados:
             # Usa o primeiro resultado
-            itens_receita.append({
-                "produto_id": resultados[0]["id"],
-                "quantidade_porcao": ing["quantidade"],
-                "observacao": None
-            })
+            itens_receita.append(
+                {
+                    "produto_id": resultados[0]["id"],
+                    "quantidade_porcao": ing["quantidade"],
+                    "observacao": None,
+                }
+            )
         else:
             nao_encontrados.append(ing["nome"])
 
@@ -1062,23 +1079,20 @@ async def comando_add_receita(update: Update, context: ContextTypes.DEFAULT_TYPE
         "modo_preparo": modo_preparo,
         "porcoes": 1,
         "tags": [t.strip() for t in tags_str.split(",")] if tags_str else [],
-        "itens": itens_receita
+        "itens": itens_receita,
     }
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            r = await client.post(
-                f"{config.API_URL()}/receitas",
-                json=payload
-            )
+            r = await client.post(f"{config.API_URL()}/receitas", json=payload)
 
         if r.status_code == 201:
             data = r.json()
             pendentes = data.get("pendentes", [])
-            
+
             texto = f"✅ Receita *{nome}* criada com sucesso!\n\n"
             texto += f"📦 {len(itens_receita)} ingredientes adicionados.\n"
-            
+
             if pendentes:
                 texto += f"\n⚠️ *{len(pendentes)} ingredientes pendentes*\n"
                 texto += "_Produtos não encontrados no estoque. Use `/editar_item` para vincular._\n"
@@ -1086,24 +1100,28 @@ async def comando_add_receita(update: Update, context: ContextTypes.DEFAULT_TYPE
                     texto += f"• {p['observacao']} ({p['quantidade']})\n"
                 if len(pendentes) > 5:
                     texto += f"_... e mais {len(pendentes) - 5}_"
-            
+
             texto += f"\n💡 Use `/receita {nome}` para ver detalhes."
             await update.message.reply_text(texto, parse_mode="Markdown")
         elif r.status_code == 400:
             erro = r.json().get("detail", "Erro desconhecido")
             await update.message.reply_text(f"❌ {erro}")
         else:
-            await update.message.reply_text(f"❌ Erro ao criar receita: {r.status_code}")
+            await update.message.reply_text(
+                f"❌ Erro ao criar receita: {r.status_code}"
+            )
 
     except Exception as e:
         await update.message.reply_text(f"❌ Erro: {str(e)}")
 
 
 @authorized_handler
-async def comando_editar_item_receita(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def comando_editar_item_receita(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+):
     """
     Edita um ingrediente de receita.
-    
+
     Uso: /editar_item <receita_id> <item_id> <novo_produto>
     Exemplo: /editar_item 1 5 10
     """
@@ -1141,7 +1159,7 @@ async def comando_editar_item_receita(update: Update, context: ContextTypes.DEFA
         async with httpx.AsyncClient(timeout=30.0) as client:
             r = await client.patch(
                 f"{config.API_URL()}/receitas/{receita_id}/itens/{item_id}",
-                params={"produto_id": produto_id}
+                params={"produto_id": produto_id},
             )
 
         if r.status_code == 200:
@@ -1155,7 +1173,9 @@ async def comando_editar_item_receita(update: Update, context: ContextTypes.DEFA
         elif r.status_code == 404:
             await update.message.reply_text("❌ Receita ou item não encontrado")
         else:
-            await update.message.reply_text(f"❌ Erro: {r.json().get('detail', 'Erro desconhecido')}")
+            await update.message.reply_text(
+                f"❌ Erro: {r.json().get('detail', 'Erro desconhecido')}"
+            )
 
     except Exception as e:
         await update.message.reply_text(f"❌ Erro: {str(e)}")
@@ -1286,7 +1306,7 @@ async def comando_agente(update: Update, context: ContextTypes.DEFAULT_TYPE):
             response = await client.post(
                 f"{config.API_URL()}/ia/agente",
                 json={"pergunta": pergunta},
-                timeout=120.0,
+                timeout=180.0,
             )
 
             if response.status_code == 200:

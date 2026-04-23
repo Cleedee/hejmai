@@ -343,9 +343,11 @@ elif page == "🤷 NLP Playground":
 # =============================================================================
 
 elif page == "📊 Analytics":
-    # Carregar dados de alertas para obter lista de produtos
-    alertas = get_produtos_alertas_cached()
-    produtos = alertas.get("estoque_baixo", []) + alertas.get("vencendo_em_breve", [])
+    # Carregar TODOS os produtos para gráfico de preços
+    try:
+        produtos = api.get_produtos_todos()
+    except Exception:
+        produtos = alertas.get("estoque_baixo", []) + alertas.get("vencendo_em_breve", [])
     
     # Seção 1: Gráfico de Preços
     render_price_chart(api, produtos)

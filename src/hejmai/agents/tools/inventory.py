@@ -4,11 +4,41 @@ Inventory Tool para o Hejmai Agent.
 Fornece capacidades de consulta e modificação do estoque.
 """
 
+import datetime
+
 from agno.tools import tool
 
 from hejmai import crud
 from hejmai.database import SessionLocal
 from hejmai.vigia_estoque.analise_consumo import analisar_estoque, gerar_relatorio_texto
+
+
+@tool
+def consultar_ultimas_compras() -> str:
+    """Check the last purchases."""
+    db = SessionLocal()
+    try:
+        compras = crud.get_compras_recentes(db)
+        if not compras:
+            return "Nenhuma compra recente encontrada."
+
+        texto = "*Últimas Compras Realizadas*\n\n"
+        for i, compra in enumerate(compras, 1):
+            data_formatada = compra.data_compra.strftime("%d/%m/%Y")
+
+            quantidade_itens = len(compra.itens) if compra.itens else 0
+
+            texto += f"*{i}. {compra.local_compra}*\n"
+            texto += f"   📅 {data_formatada}\n"
+            texto += f"   💰 R$ {compra.valor_total_nota:.2f}\n"
+            texto += f"   📦 {quantidade_itens} itens\n\n"
+
+        total_geral = sum(c.valor_total_nota for c in compras)
+        texto += f"💵 *Total (últimas {len(compras)} compras): R$ {total_geral:.2f}*"
+
+        return texto
+    finally:
+        db.close()
 
 
 @tool
@@ -117,6 +147,7 @@ def analisar_frequencia_consumo(produto_nome: str) -> str:
 
 
 InventoryTool = [
+    consultar_ultimas_compras,
     consultar_estoque,
     verificar_alertas_estoque,
     analisar_frequencia_consumo,
