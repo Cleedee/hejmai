@@ -236,6 +236,17 @@ def get_compra_por_id(db: Session, compra_id: int) -> Optional[models.Compra]:
     return db.query(models.Compra).filter(models.Compra.id == compra_id).first()
 
 
+def get_compra_por_data(db: Session, data: datetime.date) -> List[models.Compra]:
+    """Busca compras por data específica."""
+    return (
+        db.query(models.Compra)
+        .filter(models.Compra.data_compra == data)
+        .filter(models.Compra.excluida == 0)
+        .order_by(models.Compra.id.desc())
+        .all()
+    )
+
+
 # =============================================================================
 # Itens de Compra
 # =============================================================================

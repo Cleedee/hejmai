@@ -146,9 +146,50 @@ def analisar_frequencia_consumo(produto_nome: str) -> str:
         db.close()
 
 
+@tool
+def consultar_compras_por_data(data: str) -> str:
+    """
+    Consulta compras realizadas em uma data específica.
+    Args:
+        data: Data no formato DD/MM/AAAA
+    """
+    db = SessionLocal()
+    try:
+        data_obj = datetime.datetime.strptime(data, "%d/%m/%Y").date()
+        compras = crud.get_compra_por_data(db, data_obj)
+
+        if not compras:
+            return f"❌ Nenhuma compra encontrada em {data}."
+
+        texto = f"🛒 *Compras em {data}*\n\n"
+        total_dia = 0
+
+        for i, compra in enumerate(compras, 1):
+            texto += f"*{i}. {compra.local_compra}*\n"
+            texto += f"   💰 R$ {compra.valor_total_nota:.2f}\n"
+
+            if compra.itens:
+                texto += "   📦 Produtos:\n"
+                for item in compra.itens:
+                    texto += f"      • {item.produto.nome}: {item.quantidade} x R$ {item.preco_unitario:.2f}\n"
+
+            texto += "\n"
+            total_dia += compra.valor_total_nota
+
+        texto += f"💵 *Total do dia: R$ {total_dia:.2f}*"
+        return texto
+    except ValueError:
+        return "❌ Formato de data inválido. Use DD/MM/AAAA."
+    except Exception as e:
+        return f"❌ Erro ao buscar compras: {e}"
+    finally:
+        db.close()
+
+
 InventoryTool = [
     consultar_ultimas_compras,
     consultar_estoque,
     verificar_alertas_estoque,
     analisar_frequencia_consumo,
+    consultar_compras_por_data,
 ]
