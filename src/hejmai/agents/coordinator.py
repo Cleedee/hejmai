@@ -5,6 +5,8 @@ Este é o "cérebro" do sistema. Ele recebe perguntas em linguagem natural,
 decide qual ferramenta usar e sintetiza a resposta final.
 """
 
+from datetime import datetime, timedelta, timezone
+
 from agno.agent import Agent
 from agno.models.ollama import Ollama
 
@@ -21,6 +23,9 @@ def get_coordinator_agent() -> Agent:
 
     O coordenador tem acesso às ferramentas de Inventário, Finanças, Projeção e Receitas.
     """
+
+    gmt_menos_3 = timezone(timedelta(hours=-3))    
+    hoje = datetime.now(gmt_menos_3)   
 
     ferramentas = InventoryTool + FinanceTool + ProjectionTool + RecipeTool
 
@@ -41,6 +46,7 @@ def get_coordinator_agent() -> Agent:
             "Se você precisar de informações externas, use as ferramentas disponíveis.",
             "Responda SEMPRE no formato JSON quando chamar uma ferramenta.",
             "Não tente adivinhar valores, peça se não souber o parâmetro.",
+            f"O dia de hoje é {hoje.strftime('%d/%m/%Y')}.",
         ],
         markdown=True,
         debug_mode=True,
