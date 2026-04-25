@@ -828,6 +828,7 @@ async def editar_produto(
         )
 
     produto = crud.atualizar_produto(db, produto_id, dados)
+    print("Dados:", dados)
     if not produto:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
 

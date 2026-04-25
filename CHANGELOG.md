@@ -8,6 +8,8 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 ## [Não Lançado]
 
 ### Corrigido
+- Erro no endpoint /produtos/unificar
+- Horário do job não usa o GMT-3
 
 ## [0.1.1] - 2026-04-22
 
