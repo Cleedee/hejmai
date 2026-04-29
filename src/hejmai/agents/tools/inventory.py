@@ -119,7 +119,7 @@ def analisar_frequencia_consumo(produto_nome: str) -> str:
             db.query(models.Movimentacao)
             .filter(models.Movimentacao.produto_id == produto.id)
             .filter(models.Movimentacao.tipo == "consumo")
-            .order_by(models.Movimentacao.data.desc())
+            .order_by(models.Movimentacao.data_movimento.desc())
             .limit(10)
             .all()
         )
