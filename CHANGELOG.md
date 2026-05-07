@@ -10,6 +10,11 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 ### Corrigido
 - Erro no endpoint /produtos/unificar
 - Horário do job não usa o GMT-3
+- Edição de tags de produto
+- Edição de tags de receita
+
+### Adicionado
+- Lista com Compras Básicas
 
 ## [0.1.1] - 2026-04-22
 
